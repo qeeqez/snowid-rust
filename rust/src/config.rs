@@ -116,31 +116,34 @@ impl SnowIDConfigBuilder {
 
     /// Set the number of bits for node ID (6-16)
     /// Sequence bits will be automatically set to (22 - node_bits)
-    /// 
+    ///
     /// # Arguments
     /// * `bits` - Number of bits for node ID (6-16)
-    /// 
+    ///
     /// # Returns
     /// * `Self` - Builder instance for chaining
-    /// 
+    ///
     /// # Panics
     /// Panics if bits is not between 6 and 16 (inclusive)
-    /// 
+    ///
     /// # Note
     /// The range is limited to 6-16 bits due to u16 constraints:
     /// - Minimum 6 bits = 64 nodes (reasonable minimum for distributed systems)
     /// - Maximum 16 bits = 65,536 nodes (u16 max value)
     pub fn node_bits(mut self, bits: u8) -> Self {
-        assert!(bits >= 6 && bits <= 16, "Node bits must be between 6 and 16");
+        assert!(
+            (6..=16).contains(&bits),
+            "Node bits must be between 6 and 16"
+        );
         self.node_bits = bits;
         self
     }
 
     /// Set a custom epoch timestamp in milliseconds
-    /// 
+    ///
     /// # Arguments
     /// * `epoch` - Custom epoch timestamp in milliseconds since Unix epoch
-    /// 
+    ///
     /// # Returns
     /// * `Self` - Builder instance for chaining
     pub fn custom_epoch(mut self, epoch: u64) -> Self {
@@ -149,11 +152,17 @@ impl SnowIDConfigBuilder {
     }
 
     /// Build the final SnowIDConfig
-    /// 
+    ///
     /// # Returns
     /// * `SnowIDConfig` - The configured SnowIDConfig instance
     pub fn build(self) -> SnowIDConfig {
         SnowIDConfig::new(self.node_bits, self.custom_epoch)
+    }
+}
+
+impl Default for SnowIDConfigBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -170,7 +179,10 @@ mod tests {
             for bits in 6..=16 {
                 let config = SnowIDConfig::builder().node_bits(bits).build();
                 assert_eq!(config.node_bits(), bits);
-                assert_eq!(config.sequence_bits(), SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - bits);
+                assert_eq!(
+                    config.sequence_bits(),
+                    SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - bits
+                );
                 assert_eq!(config.max_node_id(), ((1u32 << bits) - 1) as u16);
             }
         }
@@ -210,7 +222,10 @@ mod tests {
     fn test_default_config() {
         let config = SnowIDConfig::default();
         assert_eq!(config.node_bits(), DEFAULT_NODE_BITS);
-        assert_eq!(config.sequence_bits(), SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - DEFAULT_NODE_BITS);
+        assert_eq!(
+            config.sequence_bits(),
+            SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - DEFAULT_NODE_BITS
+        );
         assert_eq!(config.custom_epoch(), DEFAULT_CUSTOM_EPOCH);
     }
 

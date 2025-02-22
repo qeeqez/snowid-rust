@@ -1,4 +1,4 @@
 **/target/
-**/build/
+**/debug/
 .DS_Store
 .idea/

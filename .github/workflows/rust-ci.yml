@@ -3,12 +3,8 @@ name: Rust CI
 on:
   push:
     branches: [ "main" ]
-    paths:
-      - 'rust/**'
   pull_request:
-    branches: [ "main" ]
-    paths:
-      - 'rust/**'
+    branches: [ "**" ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -24,32 +20,28 @@ jobs:
           - os: ubuntu-24.04-arm
           - os: windows-latest
           - os: macos-latest
-        
-    defaults:
-      run:
-        working-directory: ./rust
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        components: clippy, rustfmt
-        
-    - name: Rust Cache
-      uses: Swatinem/rust-cache@v2
-      with:
-        workspaces: "./rust -> target"
-      
-    - name: Check formatting
-      run: cargo fmt --all -- --check
-      
-    - name: Clippy
-      run: cargo clippy -- -D warnings
-      
-    - name: Build
-      run: cargo build --verbose
-      
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./rust -> target"
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Build
+        run: cargo build --verbose
+
+      - name: Run tests
+        run: cargo test --verbose

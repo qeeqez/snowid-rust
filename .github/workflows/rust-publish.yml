@@ -25,10 +25,6 @@ jobs:
           - os: macos-latest
             artifact_name: snowid-macos
             asset_name: snowid-macos-amd64
-
-    defaults:
-      run:
-        working-directory: ./rust
         
     steps:
     - uses: actions/checkout@v4
@@ -82,9 +78,6 @@ jobs:
   publish-crates:
     needs: create-release
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./rust
     steps:
       - uses: actions/checkout@v4
       

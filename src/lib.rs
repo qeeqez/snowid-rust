@@ -24,6 +24,9 @@ pub struct SnowID {
 }
 
 impl SnowID {
+    pub const TIMESTAMP_BITS: u32 = 42;
+    pub const TOTAL_NODE_AND_SEQUENCE_BITS: u8 = 22;
+
     /// Create a new SnowID generator with default configuration
     ///
     /// # Arguments

@@ -1,6 +1,6 @@
+use crate::SnowID;
+
 /// Default configuration values
-const TIMESTAMP_BITS: u8 = 42; // Fixed timestamp bits
-const TOTAL_NODE_AND_SEQUENCE_BITS: u8 = 22; // Fixed total for node + sequence
 const DEFAULT_NODE_BITS: u8 = 10;
 const DEFAULT_CUSTOM_EPOCH: u64 = 1704067200000; // January 1, 2024 UTC
 
@@ -19,13 +19,13 @@ pub struct SnowIDConfig {
 impl SnowIDConfig {
     /// Create new SnowIDConfig with given node bits
     fn new(node_bits: u8, custom_epoch: u64) -> Self {
-        let sequence_bits = TOTAL_NODE_AND_SEQUENCE_BITS - node_bits;
+        let sequence_bits = SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - node_bits;
         Self {
             node_bits,
             custom_epoch,
-            timestamp_shift: TOTAL_NODE_AND_SEQUENCE_BITS,
+            timestamp_shift: SnowID::TOTAL_NODE_AND_SEQUENCE_BITS,
             node_shift: sequence_bits,
-            timestamp_mask: (1 << TIMESTAMP_BITS) - 1,
+            timestamp_mask: (1 << SnowID::TIMESTAMP_BITS) - 1,
             node_mask: ((1u32 << node_bits) - 1) as u16,
             sequence_mask: ((1u32 << sequence_bits) - 1) as u16,
         }
@@ -39,7 +39,7 @@ impl SnowIDConfig {
     /// Get sequence bits derived from node bits
     #[inline]
     pub fn sequence_bits(&self) -> u8 {
-        TOTAL_NODE_AND_SEQUENCE_BITS - self.node_bits
+        SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - self.node_bits
     }
 
     /// Get node bits configuration
@@ -170,7 +170,7 @@ mod tests {
             for bits in 6..=16 {
                 let config = SnowIDConfig::builder().node_bits(bits).build();
                 assert_eq!(config.node_bits(), bits);
-                assert_eq!(config.sequence_bits(), TOTAL_NODE_AND_SEQUENCE_BITS - bits);
+                assert_eq!(config.sequence_bits(), SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - bits);
                 assert_eq!(config.max_node_id(), ((1u32 << bits) - 1) as u16);
             }
         }
@@ -210,7 +210,7 @@ mod tests {
     fn test_default_config() {
         let config = SnowIDConfig::default();
         assert_eq!(config.node_bits(), DEFAULT_NODE_BITS);
-        assert_eq!(config.sequence_bits(), TOTAL_NODE_AND_SEQUENCE_BITS - DEFAULT_NODE_BITS);
+        assert_eq!(config.sequence_bits(), SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - DEFAULT_NODE_BITS);
         assert_eq!(config.custom_epoch(), DEFAULT_CUSTOM_EPOCH);
     }
 

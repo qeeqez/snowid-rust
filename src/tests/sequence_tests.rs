@@ -6,27 +6,34 @@ use crate::*;
 fn test_sequence_rollover() {
     let generator = TsidGenerator::new(1).unwrap();
     let mut last_sequence = None;
+    let mut last_timestamp = None;
+    let mut max_sequence_seen = 0;
     
-    // Generate IDs until sequence rolls over
+    // Generate IDs until we see the sequence reset
     for _ in 0..1025 {
         let tsid = generator.generate().unwrap();
-        let (_, _, sequence) = generator.extract_from_tsid(tsid);
+        let (timestamp, _, sequence) = generator.extract_from_tsid(tsid);
         
-        // Sequence should never exceed max
-        assert!(sequence <= generator.max_sequence(), 
-            "Sequence {} exceeded maximum {}", sequence, generator.max_sequence());
+        // Track highest sequence number seen
+        max_sequence_seen = max_sequence_seen.max(sequence);
         
-        // If we have a last sequence and current is less, we've rolled over
-        if let Some(last) = last_sequence {
-            if sequence < last {
-                return; // Test passed - we found a rollover
+        // If we have a last sequence and timestamp
+        if let (Some(last_seq), Some(last_ts)) = (last_sequence, last_timestamp) {
+            // When timestamp changes, check if we hit max sequence in previous ms
+            if timestamp > last_ts && last_seq >= max_sequence_seen {
+                assert_eq!(sequence, 0, "Sequence should reset to 0 on timestamp change");
+                assert!(max_sequence_seen > 0, "Should have seen some sequence increment");
+                assert!(max_sequence_seen <= generator.max_sequence(), 
+                    "Sequence {} exceeded maximum {}", max_sequence_seen, generator.max_sequence());
+                return; // Test passed - we found a sequence reset after hitting max
             }
         }
         
         last_sequence = Some(sequence);
+        last_timestamp = Some(timestamp);
     }
     
-    panic!("Sequence did not roll over as expected");
+    panic!("Sequence did not reach maximum and reset as expected within {} iterations", 1025);
 }
 
 #[test]

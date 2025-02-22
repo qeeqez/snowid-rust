@@ -108,9 +108,11 @@ impl TsidGenerator {
             
             if seq < self.bit_config.max_sequence {
                 return Ok(self.create_tsid(current_ts, seq + 1));
-            } else {
-                return Err(TsidError::SequenceOverflow);
             }
+            
+            // Reset sequence and try next millisecond
+            self.sequence.store(0, Ordering::Release);
+            continue;
         }
     }
 

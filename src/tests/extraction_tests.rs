@@ -7,7 +7,7 @@ mod tests {
     fn test_tsid_components() {
         let generator = TsidGenerator::new(42).unwrap();
         let tsid = generator.generate().unwrap();
-        let (timestamp, node, sequence) = generator.extract_from_tsid(tsid);
+        let (timestamp, node, sequence) = generator.extract.decompose(tsid);
         
         assert_eq!(node, 42);
         assert_eq!(sequence, 0);
@@ -26,7 +26,7 @@ mod tests {
         let tsid = generator.generate().unwrap();
 
         // Extract components
-        let (timestamp, node, sequence) = generator.extract_from_tsid(tsid);
+        let (timestamp, node, sequence) = generator.extract.decompose(tsid);
 
         // Verify bit layout
         assert_eq!(node, 42);
@@ -46,7 +46,7 @@ mod tests {
         assert_eq!(generator.max_sequence(), 1023);
 
         let tsid = generator.generate().unwrap();
-        let (_, node, sequence) = generator.extract_from_tsid(tsid);
+        let (_, node, sequence) = generator.extract.decompose(tsid);
         
         assert!(node <= 4095, "Node ID exceeds maximum");
         assert!(sequence <= 1023, "Sequence exceeds maximum");
@@ -86,7 +86,7 @@ mod tests {
 
         let generator = TsidGenerator::with_config(1, config).unwrap();
         let tsid = generator.generate().unwrap();
-        let (timestamp, _, _) = generator.extract_from_tsid(tsid);
+        let (timestamp, _, _) = generator.extract.decompose(tsid);
 
         // The extracted timestamp should be relative to custom epoch
         assert!(timestamp > 0);

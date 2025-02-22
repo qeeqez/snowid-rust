@@ -12,7 +12,7 @@ fn test_sequence_rollover() {
     // Generate IDs until we see the sequence reset
     for _ in 0..1025 {
         let tsid = generator.generate().unwrap();
-        let (timestamp, _, sequence) = generator.extract_from_tsid(tsid);
+        let (timestamp, _, sequence) = generator.extract.decompose(tsid);
         
         // Track highest sequence number seen
         max_sequence_seen = max_sequence_seen.max(sequence);
@@ -46,7 +46,7 @@ fn test_sequence_overflow_handling() {
     // Generate enough IDs to force multiple sequence rollovers
     for _ in 0..5000 {
         let tsid = generator.generate().unwrap();
-        let (timestamp, _, sequence) = generator.extract_from_tsid(tsid);
+        let (timestamp, _, sequence) = generator.extract.decompose(tsid);
         
         // Check for sequence rollover within the same timestamp
         if let (Some(last_seq), Some(last_ts)) = (last_sequence, last_timestamp) {
@@ -79,9 +79,9 @@ fn test_sequence_restart() {
     let tsid2 = generator.generate().unwrap();
     let tsid3 = generator.generate().unwrap();
     
-    let (ts1, _, seq1) = generator.extract_from_tsid(tsid1);
-    let (ts2, _, seq2) = generator.extract_from_tsid(tsid2);
-    let (ts3, _, seq3) = generator.extract_from_tsid(tsid3);
+    let (ts1, _, seq1) = generator.extract.decompose(tsid1);
+    let (ts2, _, seq2) = generator.extract.decompose(tsid2);
+    let (ts3, _, seq3) = generator.extract.decompose(tsid3);
     
     // If timestamps are the same, sequences should increment
     if ts1 == ts2 {
@@ -102,7 +102,7 @@ fn test_sequence_restart_on_overflow() {
     // Generate IDs until we see sequence restarts
     for _ in 0..5000 {
         let tsid = generator.generate().unwrap();
-        let (timestamp, _, sequence) = generator.extract_from_tsid(tsid);
+        let (timestamp, _, sequence) = generator.extract.decompose(tsid);
         
         if let (Some(last_seq), Some(last_ts)) = (last_sequence, last_timestamp) {
             if timestamp > last_ts {

@@ -74,7 +74,7 @@ mod tests {
 
         for _ in 0..100 {
             let tsid = generator.generate().unwrap();
-            let (timestamp, _, _) = generator.extract_from_tsid(tsid);
+            let (timestamp, _, _) = generator.extract.decompose(tsid);
             assert!(timestamp >= last_timestamp);
             last_timestamp = timestamp;
             

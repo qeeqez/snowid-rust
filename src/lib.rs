@@ -19,7 +19,8 @@ pub struct TsidGenerator {
     last_timestamp: AtomicU64,
     config: TsidConfig,
     bit_config: BitConfig,
-    extractor: TsidExtractor,
+    /// Extractor for getting components from TSID
+    pub extract: TsidExtractor,
 }
 
 impl Clone for TsidGenerator {
@@ -30,7 +31,7 @@ impl Clone for TsidGenerator {
             last_timestamp: AtomicU64::new(self.last_timestamp.load(Ordering::Relaxed)),
             config: self.config,
             bit_config: self.bit_config,
-            extractor: TsidExtractor::new(self.bit_config),
+            extract: TsidExtractor::new(self.bit_config),
         }
     }
 }
@@ -70,7 +71,7 @@ impl TsidGenerator {
             last_timestamp: AtomicU64::new(0),
             config,
             bit_config,
-            extractor: TsidExtractor::new(bit_config),
+            extract: TsidExtractor::new(bit_config),
         })
     }
 
@@ -132,29 +133,6 @@ impl TsidGenerator {
         ((timestamp & self.bit_config.timestamp_mask) << self.bit_config.timestamp_shift)
             | ((self.node_id as u64 & self.bit_config.node_mask as u64) << self.bit_config.node_shift)
             | (sequence as u64 & self.bit_config.sequence_mask as u64)
-    }
-
-    /// Extract timestamp, node ID, and sequence from a TSID
-    pub fn extract_from_tsid(&self, tsid: u64) -> (u64, u16, u16) {
-        self.extractor.extract_from_tsid(tsid)
-    }
-
-    /// Extract timestamp from a TSID
-    #[inline]
-    pub fn extract_timestamp(&self, tsid: u64) -> u64 {
-        self.extractor.extract_timestamp(tsid)
-    }
-
-    /// Extract node ID from a TSID
-    #[inline]
-    pub fn extract_node(&self, tsid: u64) -> u16 {
-        self.extractor.extract_node(tsid)
-    }
-
-    /// Extract sequence from a TSID
-    #[inline]
-    pub fn extract_sequence(&self, tsid: u64) -> u16 {
-        self.extractor.extract_sequence(tsid)
     }
 
     /// Get the maximum node ID supported by the current configuration

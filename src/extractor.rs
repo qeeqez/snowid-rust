@@ -11,8 +11,8 @@ impl TsidExtractor {
         Self { bit_config }
     }
 
-    /// Extract timestamp, node ID, and sequence from a TSID
-    pub fn extract_from_tsid(&self, tsid: u64) -> (u64, u16, u16) {
+    /// Decompose TSID into its components: timestamp, node ID, and sequence
+    pub fn decompose(&self, tsid: u64) -> (u64, u16, u16) {
         (
             self.extract_timestamp(tsid),
             self.extract_node(tsid),
@@ -65,7 +65,7 @@ mod tests {
         assert_eq!(extractor.extract_sequence(tsid), sequence);
 
         // Test combined extraction
-        let (ext_timestamp, ext_node, ext_sequence) = extractor.extract_from_tsid(tsid);
+        let (ext_timestamp, ext_node, ext_sequence) = extractor.decompose(tsid);
         assert_eq!(ext_timestamp, timestamp);
         assert_eq!(ext_node, node);
         assert_eq!(ext_sequence, sequence);
@@ -86,7 +86,7 @@ mod tests {
             | ((max_node as u64) << bit_config.node_shift)
             | max_sequence as u64;
 
-        let (timestamp, node, sequence) = extractor.extract_from_tsid(tsid);
+        let (timestamp, node, sequence) = extractor.decompose(tsid);
         assert_eq!(timestamp, max_timestamp);
         assert_eq!(node, max_node);
         assert_eq!(sequence, max_sequence);

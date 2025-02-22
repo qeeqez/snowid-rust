@@ -14,8 +14,17 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: ubuntu-24.04-arm64
+          - os: windows-latest
+          - os: macos-latest
+        
     defaults:
       run:
         working-directory: ./rust
@@ -30,6 +39,8 @@ jobs:
         
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: "./rust -> target"
       
     - name: Check formatting
       run: cargo fmt --all -- --check

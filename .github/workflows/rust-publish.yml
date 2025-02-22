@@ -1,4 +1,4 @@
-name: Publish to crates.io
+name: Release & Publish
 
 on:
   push:
@@ -6,8 +6,26 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
-  publish:
-    runs-on: ubuntu-latest
+  build-and-test:
+    name: Build and Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            artifact_name: snowid-linux
+            asset_name: snowid-linux-amd64
+          - os: ubuntu-24.04-arm64
+            artifact_name: snowid-linux-arm64
+            asset_name: snowid-linux-arm64
+          - os: windows-latest
+            artifact_name: snowid-windows.exe
+            asset_name: snowid-windows-amd64.exe
+          - os: macos-latest
+            artifact_name: snowid-macos
+            asset_name: snowid-macos-amd64
+
     defaults:
       run:
         working-directory: ./rust
@@ -20,11 +38,60 @@ jobs:
     
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: "./rust -> target"
       
     - name: Run tests
       run: cargo test --verbose
       
-    - name: Publish to crates.io
-      run: cargo publish --token ${CRATES_TOKEN}
-      env:
-        CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
+    - name: Build release binary
+      run: cargo build --release
+      
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: rust/target/release/${{ matrix.artifact_name }}
+        if-no-files-found: error
+
+  create-release:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            snowid-linux/snowid-linux-amd64
+            snowid-linux-arm64/snowid-linux-arm64
+            snowid-windows/snowid-windows-amd64.exe
+            snowid-macos/snowid-macos-amd64
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-crates:
+    needs: create-release
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./rust
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Publish to crates.io
+        run: cargo publish --token ${CRATES_TOKEN}
+        env:
+          CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}

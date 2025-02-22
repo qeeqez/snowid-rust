@@ -1,73 +1,138 @@
-# 🆔 TSID Rust
+# TSID Rust
 
-[![Crates.io](https://img.shields.io/crates/v/tsid-rust.svg)](https://crates.io/crates/tsid-rust)
-[![Documentation](https://docs.rs/tsid-rust/badge.svg)](https://docs.rs/tsid-rust)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.85%2B-blue.svg?maxAge=3600)](https://github.com/qeeqez/tsid-rust)
+A Rust implementation of Time-Sorted Unique Identifiers (TSID). TSIDs are 64-bit unique identifiers that are sorted by generation time, making them ideal for distributed systems and databases.
 
-> 🚀 High-performance Rust implementation of TSID (Time-Sorted Unique Identifier) - a distributed unique ID generation system inspired by Twitter's Snowflake.
+## Features
 
-## ✨ Features
+- Thread-safe, lock-free ID generation
+- Configurable bit allocation for timestamp, node ID, and sequence
+- Monotonic ordering of IDs within and across nodes
+- Protection against clock drift and sequence overflow
+- Fast generation: ~244ns per ID in single-threaded mode
+- Efficient concurrent generation with multiple threads
+- Custom epoch support
+- Zero external dependencies
 
-- 🔢 **64-bit Integer IDs** - Efficient storage and sorting
-- ⚡ **Ultra-Fast Generation** - Lock-free and thread-safe design
-- 🎯 **Zero Dependencies** - No external crates required
-- 🔄 **Monotonic Ordering** - Guaranteed time-based sorting
-- 💻 **Distributed Ready** - Support for multiple nodes
-- 🦀 **Pure Rust** - Safe, reliable, and optimized implementation
+## Default Configuration
 
-## 🏗️ TSID Structure
+- 42 bits for timestamp (supports ~139 years with ms precision)
+- 10 bits for node ID (supports up to 1,024 nodes)
+- 12 bits for sequence (up to 4,096 IDs per ms per node)
+- Default epoch: January 1, 2024 UTC
 
-TSID is a 64-bit integer composed of:
+## Usage
 
-```
-|-- 42 bits timestamp --|-- 12 bits node --|-- 10 bits seq --|
-```
+Add this to your `Cargo.toml`:
 
-### 📊 Bits Breakdown
-
-| Component  | Bits | Description                    | Range                                    |
-|------------|------|--------------------------------|------------------------------------------|
-| Timestamp  | 42   | Milliseconds since custom epoch| ~139 years of unique timestamps         |
-| Node ID    | 12   | Machine/shard identifier      | 4,096 unique nodes                      |
-| Sequence   | 10   | Sequence number per ms        | 1,024 IDs per millisecond per node      |
-
-## 🚀 Quick Start
-
-Add to your `Cargo.toml`:
 ```toml
 [dependencies]
 tsid-rust = "0.1.0"
 ```
 
-Basic usage:
+### Basic Usage
+
 ```rust
-// Coming soon...
+use tsid_rust::TsidGenerator;
+
+// Create a generator with node ID 1
+let generator = TsidGenerator::new(1);
+
+// Generate a new TSID
+let tsid = generator.generate();
+
+// Extract all components at once
+let (timestamp, node, sequence) = generator.extract_from_tsid(tsid);
+println!("All components: ts={}, node={}, seq={}", timestamp, node, sequence);
+
+// Or extract components individually
+let ts = generator.extract_timestamp(tsid);
+let node = generator.extract_node(tsid);
+let seq = generator.extract_sequence(tsid);
+println!("Individual components: ts={}, node={}, seq={}", ts, node, seq);
 ```
 
-## 🔍 How It Works
+### Custom Configuration
 
-1. **Time-Based**: Uses 42 bits for millisecond precision timestamp
-2. **Node-Aware**: Supports distributed generation with 12-bit node ID
-3. **High-Throughput**: Can generate 1,024 unique IDs per millisecond per node
-4. **Monotonic**: IDs within the same millisecond are guaranteed to be monotonically increasing
+```rust
+use tsid_rust::{TsidGenerator, TsidConfig};
 
-## 🌟 Benefits
+// Create a custom configuration using the builder
+let config = TsidConfig::builder()
+    .node_bits(12)          // Support up to 4096 nodes (sequence bits will be 10)
+    .custom_epoch(1704067200000) // January 1, 2024 UTC
+    .build();
 
-- **Sortable**: IDs can be sorted by time, perfect for database indexing
-- **Distributed**: Works across multiple nodes without coordination
-- **Compact**: 64-bit integer format, more efficient than UUID
-- **Predictable**: Fixed-length IDs with known characteristics
+// Create a generator with custom config
+let generator = TsidGenerator::with_config(1, config);
 
-## 🤝 Contributing
+// Or just customize node bits
+let config = TsidConfig::builder()
+    .node_bits(16)  // Support up to 65536 nodes (sequence bits will be 6)
+    .build();       // Use default epoch
 
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+// Get maximum values for the configuration
+println!("Max node ID: {}", generator.max_node_id());
+println!("Max sequence per ms: {}", generator.max_sequence());
+```
 
-## 📝 License
+### Thread-Safe Usage
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+```rust
+use std::sync::Arc;
+use std::thread;
+use tsid_rust::TsidGenerator;
 
-## 🙏 Acknowledgments
+// Create a shared generator
+let generator = Arc::new(TsidGenerator::new(1));
 
-- Inspired by Twitter's Snowflake ID system
-- Built with ❤️ using Rust
+// Spawn multiple threads
+let mut handles = vec![];
+for _ in 0..4 {
+    let gen = Arc::clone(&generator);
+    handles.push(thread::spawn(move || {
+        for _ in 0..1000 {
+            let id = gen.generate();
+            // Use the ID...
+        }
+    }));
+}
+
+// Wait for all threads to finish
+for handle in handles {
+    handle.join().unwrap();
+}
+```
+
+## Performance
+
+Benchmark results on a typical machine:
+
+- Single thread ID generation: ~244ns per ID
+- Sequential generation: ~24µs for 100 IDs
+- Component extraction: ~836ps
+- Concurrent generation (8 threads): ~66µs for 800 IDs
+
+## Implementation Details
+
+The TSID is a 64-bit integer composed of:
+
+```text
+|------------------------------------------|------------|------------|
+|              TIMESTAMP                    |   NODE     |  SEQUENCE  |
+|------------------------------------------|------------|------------|
+```
+
+- Timestamp: Milliseconds since custom epoch
+- Node ID: Unique identifier for the generator instance
+- Sequence: Counter that resets every millisecond
+
+The implementation ensures:
+- Monotonic ordering of IDs
+- Thread-safe generation without locks
+- Efficient handling of sequence overflow
+- Protection against clock drift
+- No external dependencies
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

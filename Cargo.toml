@@ -18,3 +18,10 @@ opt-level = 0
 debug = true
 
 [dependencies]
+
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
+
+[[bench]]
+name = "tsid_benchmarks"
+harness = false

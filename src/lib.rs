@@ -61,51 +61,41 @@ impl TsidGenerator {
             let timestamp = self.current_time();
             let last = self.last_timestamp.load(Ordering::Acquire);
             
+            // If timestamp moved forward, try to update it
             if timestamp > last {
-                // New millisecond, try to update last_timestamp
-                match self.last_timestamp.compare_exchange(
+                if let Ok(_) = self.last_timestamp.compare_exchange(
                     last,
                     timestamp,
                     Ordering::AcqRel,
                     Ordering::Acquire,
                 ) {
-                    Ok(_) => {
-                        // Successfully updated timestamp, reset sequence
-                        self.sequence.store(0, Ordering::Release);
-                        return self.create_tsid(timestamp, 0);
-                    }
-                    Err(_) => continue, // Another thread updated timestamp, retry
+                    self.sequence.store(0, Ordering::Release);
+                    return self.create_tsid(timestamp, 0);
                 }
-            } else if timestamp < last {
-                // Clock went backwards, use last timestamp and try to get next sequence
-                let seq = self.sequence.fetch_add(1, Ordering::AcqRel);
-                if seq < TSID_MAX_SEQUENCE {
-                    return self.create_tsid(last, seq + 1);
-                }
-                // Sequence exhausted, busy-wait for next millisecond
                 continue;
-            } else {
-                // Same millisecond, try to get next sequence
-                let seq = self.sequence.fetch_add(1, Ordering::AcqRel);
-                if seq < TSID_MAX_SEQUENCE {
-                    return self.create_tsid(timestamp, seq + 1);
-                }
-                // Sequence exhausted, busy-wait for next millisecond
-                continue;
+            }
+            
+            // Get next sequence for current timestamp (use last if clock moved backwards)
+            let current_ts = if timestamp < last { last } else { timestamp };
+            let seq = self.sequence.fetch_add(1, Ordering::AcqRel);
+            
+            if seq < TSID_MAX_SEQUENCE {
+                return self.create_tsid(current_ts, seq + 1);
             }
         }
     }
 
+    #[inline]
     /// Get the current timestamp in milliseconds since the custom epoch
     fn current_time(&self) -> u64 {
-        let now = SystemTime::now()
+        SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
-            .as_millis() as u64;
-        
-        now.saturating_sub(TSID_EPOCH)
+            .as_millis() as u64
+            - TSID_EPOCH
     }
 
+    #[inline]
     /// Create a TSID from components
     fn create_tsid(&self, timestamp: u64, sequence: u16) -> u64 {
         ((timestamp & TSID_TIMESTAMP_MASK) << TSID_TIMESTAMP_SHIFT)

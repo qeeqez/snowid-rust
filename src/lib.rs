@@ -3,121 +3,12 @@
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Default configuration values
-const TIMESTAMP_BITS: u8 = 42; // Fixed timestamp bits
-const TOTAL_NODE_AND_SEQUENCE_BITS: u8 = 22; // Fixed total for node + sequence
-pub const DEFAULT_NODE_BITS: u8 = 10;
-pub const DEFAULT_CUSTOM_EPOCH: u64 = 1704067200000; // January 1, 2024 UTC
+mod config;
+mod error;
 
-/// Configuration for TSID Generator
-#[derive(Debug, Clone, Copy)]
-pub struct TsidConfig {
-    node_bits: u8,
-    sequence_bits: u8,
-    custom_epoch: u64,
-}
-
-impl Default for TsidConfig {
-    fn default() -> Self {
-        Self {
-            node_bits: DEFAULT_NODE_BITS,
-            sequence_bits: TOTAL_NODE_AND_SEQUENCE_BITS - DEFAULT_NODE_BITS,
-            custom_epoch: DEFAULT_CUSTOM_EPOCH,
-        }
-    }
-}
-
-/// Builder for TsidConfig
-#[derive(Debug)]
-pub struct TsidConfigBuilder {
-    config: TsidConfig,
-}
-
-impl TsidConfigBuilder {
-    /// Create a new TsidConfigBuilder with default values
-    pub fn new() -> Self {
-        Self {
-            config: TsidConfig::default(),
-        }
-    }
-
-    /// Set the number of bits for node ID (1-20)
-    /// Sequence bits will be automatically set to (22 - node_bits)
-    /// 
-    /// # Arguments
-    /// * `bits` - Number of bits for node ID (1-20)
-    /// 
-    /// # Returns
-    /// * `Self` - Builder instance for chaining
-    /// 
-    /// # Panics
-    /// Panics if bits is not between 1 and 20
-    pub fn node_bits(mut self, bits: u8) -> Self {
-        assert!(bits > 0 && bits <= 20, "Node bits must be between 1 and 20");
-        self.config.node_bits = bits;
-        self.config.sequence_bits = TOTAL_NODE_AND_SEQUENCE_BITS - bits;
-        self
-    }
-
-    /// Set a custom epoch timestamp in milliseconds
-    /// 
-    /// # Arguments
-    /// * `epoch` - Custom epoch timestamp in milliseconds since Unix epoch
-    /// 
-    /// # Returns
-    /// * `Self` - Builder instance for chaining
-    pub fn custom_epoch(mut self, epoch: u64) -> Self {
-        self.config.custom_epoch = epoch;
-        self
-    }
-
-    /// Build the final TsidConfig
-    /// 
-    /// # Returns
-    /// * `TsidConfig` - The configured TsidConfig instance
-    pub fn build(self) -> TsidConfig {
-        self.config
-    }
-}
-
-impl TsidConfig {
-    /// Create a new configuration builder
-    pub fn builder() -> TsidConfigBuilder {
-        TsidConfigBuilder::new()
-    }
-
-    /// Create masks and shifts based on configuration
-    fn create_bit_config(&self) -> BitConfig {
-        let node_shift = self.sequence_bits;
-        let timestamp_shift = self.node_bits + self.sequence_bits;
-
-        let sequence_mask = (1 << self.sequence_bits) - 1;
-        let node_mask = (1 << self.node_bits) - 1;
-        let timestamp_mask = (1u64 << TIMESTAMP_BITS) - 1;
-
-        BitConfig {
-            node_shift,
-            timestamp_shift,
-            sequence_mask,
-            node_mask,
-            timestamp_mask,
-            max_sequence: sequence_mask,
-            max_node: node_mask,
-        }
-    }
-}
-
-/// Internal bit configuration
-#[derive(Debug, Clone, Copy)]
-struct BitConfig {
-    node_shift: u8,
-    timestamp_shift: u8,
-    sequence_mask: u16,
-    node_mask: u16,
-    timestamp_mask: u64,
-    max_sequence: u16,
-    max_node: u16,
-}
+pub use config::{TsidConfig, DEFAULT_NODE_BITS, DEFAULT_CUSTOM_EPOCH};
+pub use error::TsidError;
+use config::BitConfig;
 
 /// TSID Generator for creating unique, time-sorted IDs
 pub struct TsidGenerator {
@@ -146,9 +37,9 @@ impl TsidGenerator {
     /// # Arguments
     /// * `node_id` - Node identifier (0-1023 by default)
     ///
-    /// # Panics
-    /// Panics if node_id is greater than maximum allowed by configuration
-    pub fn new(node_id: u16) -> Self {
+    /// # Returns
+    /// * `Result<Self, TsidError>` - A new TSID generator or an error if node_id is invalid
+    pub fn new(node_id: u16) -> Result<Self, TsidError> {
         Self::with_config(node_id, TsidConfig::default())
     }
 
@@ -158,26 +49,33 @@ impl TsidGenerator {
     /// * `node_id` - Node identifier (range depends on configuration)
     /// * `config` - Custom configuration for TSID generation
     ///
-    /// # Panics
-    /// Panics if node_id is greater than maximum allowed by configuration
-    pub fn with_config(node_id: u16, config: TsidConfig) -> Self {
+    /// # Returns
+    /// * `Result<Self, TsidError>` - A new TSID generator or an error if node_id is invalid
+    pub fn with_config(node_id: u16, config: TsidConfig) -> Result<Self, TsidError> {
         let bit_config = config.create_bit_config();
-        assert!(node_id <= bit_config.max_node, 
-            "Node ID must be between 0 and {}", bit_config.max_node);
+        if node_id > bit_config.max_node {
+            return Err(TsidError::InvalidNodeId {
+                node_id,
+                max_allowed: bit_config.max_node,
+            });
+        }
 
-        Self {
+        Ok(Self {
             node_id,
             sequence: AtomicU16::new(0),
             last_timestamp: AtomicU64::new(0),
             config,
             bit_config,
-        }
+        })
     }
 
     /// Generate a new TSID
-    pub fn generate(&self) -> u64 {
+    ///
+    /// # Returns
+    /// * `Result<u64, TsidError>` - A new TSID or an error if generation fails
+    pub fn generate(&self) -> Result<u64, TsidError> {
         loop {
-            let timestamp = self.current_time();
+            let timestamp = self.current_time()?;
             let last = self.last_timestamp.load(Ordering::Acquire);
             
             // If timestamp moved forward, try to update it
@@ -189,29 +87,36 @@ impl TsidGenerator {
                     Ordering::Acquire,
                 ) {
                     self.sequence.store(0, Ordering::Release);
-                    return self.create_tsid(timestamp, 0);
+                    return Ok(self.create_tsid(timestamp, 0));
                 }
                 continue;
             }
             
             // Get next sequence for current timestamp (use last if clock moved backwards)
-            let current_ts = if timestamp < last { last } else { timestamp };
+            let current_ts = if timestamp < last { 
+                return Err(TsidError::ClockBackwards);
+            } else { 
+                timestamp 
+            };
+            
             let seq = self.sequence.fetch_add(1, Ordering::AcqRel);
             
             if seq < self.bit_config.max_sequence {
-                return self.create_tsid(current_ts, seq + 1);
+                return Ok(self.create_tsid(current_ts, seq + 1));
+            } else {
+                return Err(TsidError::SequenceOverflow);
             }
         }
     }
 
     #[inline]
     /// Get the current timestamp in milliseconds since the configured epoch
-    fn current_time(&self) -> u64 {
-        SystemTime::now()
+    fn current_time(&self) -> Result<u64, TsidError> {
+        Ok(SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
+            .map_err(|_| TsidError::ClockBackwards)?
             .as_millis() as u64
-            - self.config.custom_epoch
+            - self.config.custom_epoch)
     }
 
     #[inline]
@@ -272,6 +177,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
+    use crate::config::TIMESTAMP_BITS;
 
     #[test]
     fn test_custom_config() {
@@ -280,11 +186,11 @@ mod tests {
             .custom_epoch(DEFAULT_CUSTOM_EPOCH)
             .build();
 
-        let generator = TsidGenerator::with_config(1023, config);
+        let generator = TsidGenerator::with_config(1023, config).unwrap();
         assert_eq!(generator.max_node_id(), 4095);
         assert_eq!(generator.max_sequence(), 1023);
 
-        let tsid = generator.generate();
+        let tsid = generator.generate().unwrap();
         let (_, node, sequence) = generator.extract_from_tsid(tsid);
         
         assert!(node <= 4095, "Node ID exceeds maximum");
@@ -293,15 +199,15 @@ mod tests {
 
     #[test]
     fn test_tsid_generation() {
-        let generator = TsidGenerator::new(1);
-        let tsid = generator.generate();
+        let generator = TsidGenerator::new(1).unwrap();
+        let tsid = generator.generate().unwrap();
         assert!(tsid > 0);
     }
 
     #[test]
     fn test_tsid_components() {
-        let generator = TsidGenerator::new(42);
-        let tsid = generator.generate();
+        let generator = TsidGenerator::new(42).unwrap();
+        let tsid = generator.generate().unwrap();
         let (timestamp, node, sequence) = generator.extract_from_tsid(tsid);
         
         assert_eq!(node, 42);
@@ -311,40 +217,45 @@ mod tests {
 
     #[test]
     fn test_sequential_generation() {
-        let generator = TsidGenerator::new(1);
-        let tsid1 = generator.generate();
-        let tsid2 = generator.generate();
+        let generator = TsidGenerator::new(1).unwrap();
+        let tsid1 = generator.generate().unwrap();
+        let tsid2 = generator.generate().unwrap();
         assert!(tsid2 > tsid1);
     }
 
     #[test]
-    #[should_panic(expected = "Node ID must be between 0 and 1023")]
     fn test_invalid_node_id() {
-        TsidGenerator::new(1024);
+        match TsidGenerator::new(1024) {
+            Err(TsidError::InvalidNodeId { node_id, max_allowed }) => {
+                assert_eq!(node_id, 1024);
+                assert_eq!(max_allowed, 1023);
+            }
+            _ => panic!("Expected InvalidNodeId error"),
+        }
     }
 
     #[test]
     fn test_node_id_boundaries() {
         // Test minimum node ID
-        let gen0 = TsidGenerator::new(0);
-        let tsid0 = gen0.generate();
+        let gen0 = TsidGenerator::new(0).unwrap();
+        let tsid0 = gen0.generate().unwrap();
         let (_, node0, _) = gen0.extract_from_tsid(tsid0);
         assert_eq!(node0, 0);
 
         // Test maximum node ID
-        let gen1023 = TsidGenerator::new(1023);
-        let tsid1023 = gen1023.generate();
+        let gen1023 = TsidGenerator::new(1023).unwrap();
+        let tsid1023 = gen1023.generate().unwrap();
         let (_, node1023, _) = gen1023.extract_from_tsid(tsid1023);
         assert_eq!(node1023, 1023);
     }
 
     #[test]
     fn test_sequence_rollover() {
-        let generator = TsidGenerator::new(1);
+        let generator = TsidGenerator::new(1).unwrap();
         
         // Generate IDs until sequence rolls over
         for _ in 0..1025 {
-            let tsid = generator.generate();
+            let tsid = generator.generate().unwrap();
             let (_, _, sequence) = generator.extract_from_tsid(tsid);
             
             // Sequence should never exceed max
@@ -362,7 +273,7 @@ mod tests {
 
     #[test]
     fn test_concurrent_generation() {
-        let generator = Arc::new(TsidGenerator::new(1));
+        let generator = Arc::new(TsidGenerator::new(1).unwrap());
         let generator = std::sync::Arc::new(generator);
         let mut handles = vec![];
         let num_threads = 4;
@@ -372,7 +283,7 @@ mod tests {
         for _ in 0..num_threads {
             let gen = generator.clone();
             handles.push(thread::spawn(move || {
-                (0..ids_per_thread).map(|_| gen.generate()).collect::<Vec<_>>()
+                (0..ids_per_thread).map(|_| gen.generate().unwrap()).collect::<Vec<_>>()
             }));
         }
 
@@ -403,11 +314,11 @@ mod tests {
 
     #[test]
     fn test_timestamp_monotonicity() {
-        let generator = TsidGenerator::new(1);
+        let generator = TsidGenerator::new(1).unwrap();
         let mut last_timestamp = 0;
 
         for _ in 0..100 {
-            let tsid = generator.generate();
+            let tsid = generator.generate().unwrap();
             let (timestamp, _, _) = generator.extract_from_tsid(tsid);
             assert!(timestamp >= last_timestamp);
             last_timestamp = timestamp;
@@ -419,8 +330,8 @@ mod tests {
 
     #[test]
     fn test_component_max_values() {
-        let generator = TsidGenerator::new(1023);
-        let tsid = generator.generate();
+        let generator = TsidGenerator::new(1023).unwrap();
+        let tsid = generator.generate().unwrap();
         let (timestamp, node, sequence) = generator.extract_from_tsid(tsid);
 
         assert!(timestamp <= generator.bit_config.timestamp_mask);
@@ -430,15 +341,15 @@ mod tests {
 
     #[test]
     fn test_unique_ids_across_nodes() {
-        let gen1 = TsidGenerator::new(1);
-        let gen2 = TsidGenerator::new(2);
+        let gen1 = TsidGenerator::new(1).unwrap();
+        let gen2 = TsidGenerator::new(2).unwrap();
         
         let mut ids = HashSet::new();
         
         // Generate IDs from both generators
         for _ in 0..1000 {
-            ids.insert(gen1.generate());
-            ids.insert(gen2.generate());
+            ids.insert(gen1.generate().unwrap());
+            ids.insert(gen2.generate().unwrap());
         }
 
         // Verify all IDs are unique
@@ -447,12 +358,12 @@ mod tests {
 
     #[test]
     fn test_sequence_restart() {
-        let generator = TsidGenerator::new(1);
+        let generator = TsidGenerator::new(1).unwrap();
         
         // Generate multiple IDs in the same millisecond
-        let tsid1 = generator.generate();
-        let tsid2 = generator.generate();
-        let tsid3 = generator.generate();
+        let tsid1 = generator.generate().unwrap();
+        let tsid2 = generator.generate().unwrap();
+        let tsid3 = generator.generate().unwrap();
         
         let (_, _, seq1) = generator.extract_from_tsid(tsid1);
         let (_, _, seq2) = generator.extract_from_tsid(tsid2);
@@ -466,7 +377,7 @@ mod tests {
         thread::sleep(Duration::from_millis(2));
         
         // Generate new ID after timestamp change
-        let tsid_new = generator.generate();
+        let tsid_new = generator.generate().unwrap();
         let (_, _, new_seq) = generator.extract_from_tsid(tsid_new);
         
         // Verify sequence resets
@@ -476,8 +387,8 @@ mod tests {
     #[test]
     fn test_bit_layout() {
         let node_id = 42;
-        let generator = TsidGenerator::new(node_id);
-        let tsid = generator.generate();
+        let generator = TsidGenerator::new(node_id).unwrap();
+        let tsid = generator.generate().unwrap();
         
         // Extract components using bit masks directly
         let timestamp = (tsid >> generator.bit_config.timestamp_shift) & generator.bit_config.timestamp_mask;
@@ -496,8 +407,8 @@ mod tests {
 
     #[test]
     fn test_epoch_handling() {
-        let generator = TsidGenerator::new(1);
-        let tsid = generator.generate();
+        let generator = TsidGenerator::new(1).unwrap();
+        let tsid = generator.generate().unwrap();
         let (timestamp, _, _) = generator.extract_from_tsid(tsid);
         
         // Get current time relative to Unix epoch
@@ -521,14 +432,14 @@ mod tests {
 
     #[test]
     fn test_sequence_overflow_handling() {
-        let generator = TsidGenerator::new(1);
+        let generator = TsidGenerator::new(1).unwrap();
         
         // Spawn multiple threads to generate IDs rapidly
         let handles: Vec<_> = (0..4).map(|_| {
             let gen = generator.clone();
             thread::spawn(move || {
                 for _ in 0..300 {
-                    let id = gen.generate();
+                    let id = gen.generate().unwrap();
                     let (_timestamp, _, sequence) = gen.extract_from_tsid(id);
                     
                     // Verify sequence doesn't exceed max
@@ -546,7 +457,7 @@ mod tests {
 
     #[test]
     fn test_concurrent_sequence_uniqueness() {
-        let generator = Arc::new(TsidGenerator::new(1));
+        let generator = Arc::new(TsidGenerator::new(1).unwrap());
         let seen_ids = Arc::new(Mutex::new(HashSet::new()));
         let threads = 4;
         let ids_per_thread = 500;
@@ -556,7 +467,7 @@ mod tests {
             let seen = seen_ids.clone();
             thread::spawn(move || {
                 for _ in 0..ids_per_thread {
-                    let id = gen.generate();
+                    let id = gen.generate().unwrap();
                     let mut seen = seen.lock().unwrap();
                     assert!(!seen.contains(&id), "Duplicate ID generated: {}", id);
                     seen.insert(id);
@@ -575,12 +486,20 @@ mod tests {
 
     #[test]
     fn test_rapid_generation() {
-        let generator = TsidGenerator::new(1);
+        let generator = TsidGenerator::new(1).unwrap();
         let mut last_id = 0;
         
         // Generate IDs as fast as possible
         for _ in 0..10_000 {
-            let id = generator.generate();
+            let id = match generator.generate() {
+                Ok(id) => id,
+                Err(TsidError::SequenceOverflow) => {
+                    // On sequence overflow, wait for next millisecond and retry
+                    thread::sleep(Duration::from_millis(1));
+                    generator.generate().unwrap()
+                }
+                Err(e) => panic!("Unexpected error: {:?}", e),
+            };
             assert!(id > last_id, "ID not monotonically increasing");
             last_id = id;
         }
@@ -588,8 +507,8 @@ mod tests {
 
     #[test]
     fn test_component_boundaries() {
-        let generator = TsidGenerator::new(1023);
-        let _tsid = generator.generate();
+        let generator = TsidGenerator::new(1023).unwrap();
+        let _tsid = generator.generate().unwrap();
         
         // Test maximum values for each component
         let max_timestamp = (1u64 << TIMESTAMP_BITS) - 1;
@@ -628,22 +547,22 @@ mod tests {
 
     #[test]
     fn test_zero_node_id() {
-        let generator = TsidGenerator::new(0);
-        let tsid = generator.generate();
+        let generator = TsidGenerator::new(0).unwrap();
+        let tsid = generator.generate().unwrap();
         let (_, node, _) = generator.extract_from_tsid(tsid);
         assert_eq!(node, 0, "Node ID should be preserved as 0");
     }
 
     #[test]
     fn test_sequence_restart_on_overflow() {
-        let generator = TsidGenerator::new(1);
+        let generator = TsidGenerator::new(1).unwrap();
         
         // Generate multiple IDs in the same millisecond
-        let first_id = generator.generate();
+        let first_id = generator.generate().unwrap();
         let mut last_id = first_id;
         
         for _ in 0..100 {
-            let current_id = generator.generate();
+            let current_id = generator.generate().unwrap();
             assert!(current_id > last_id, "Generated ID should be greater than previous");
             last_id = current_id;
         }

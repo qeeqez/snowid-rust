@@ -74,7 +74,7 @@ impl SnowID {
     pub fn generate(&mut self) -> u64 {
         let timestamp = self.get_time_since_epoch();
 
-        if timestamp > self.last_timestamp as u64 {
+        if timestamp > self.last_timestamp {
             self.last_timestamp = timestamp;
             self.sequence = 0;
         } else {

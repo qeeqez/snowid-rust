@@ -32,11 +32,7 @@ impl SnowIDExtractor {
 
     /// Decompose SnowID into its components: timestamp, node ID, and sequence
     pub fn decompose(&self, id: u64) -> (u64, u16, u16) {
-        (
-            self.timestamp(id),
-            self.node(id),
-            self.sequence(id)
-        )
+        (self.timestamp(id), self.node(id), self.sequence(id))
     }
 }
 

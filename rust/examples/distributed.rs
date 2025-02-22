@@ -1,9 +1,9 @@
 use rand::{rng, Rng};
+use snowid::SnowID;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use snowid::SnowID;
 
 fn main() {
     // Create a thread-safe generator with Mutex for mutable access
@@ -24,21 +24,21 @@ fn main() {
                     let mut gen = gen.lock().unwrap();
                     gen.generate()
                 };
-                
+
                 // Extract components (doesn't need mutable access)
                 let (ts, node, seq) = {
                     let gen = gen.lock().unwrap();
                     gen.extract.decompose(id)
                 };
-                
+
                 println!(
-                    "Thread {} generated ID {} (ts={}, node={}, seq={})", 
+                    "Thread {} generated ID {} (ts={}, node={}, seq={})",
                     thread_id, i, ts, node, seq
                 );
-                
+
                 // Verify ID uniqueness
                 assert!(ids.insert(id), "Duplicate ID generated!");
-                
+
                 // Random delay to simulate work
                 let delay = rng.random_range(0..=9);
                 thread::sleep(Duration::from_millis(delay));
@@ -56,12 +56,12 @@ fn main() {
 
     // Verify total number of unique IDs
     println!("\nTotal unique IDs generated: {}", all_ids.len());
-    
+
     // Verify monotonic ordering
     let mut ids: Vec<_> = all_ids.into_iter().collect();
     ids.sort_unstable();
     for i in 1..ids.len() {
-        assert!(ids[i] > ids[i-1], "IDs not monotonically increasing!");
+        assert!(ids[i] > ids[i - 1], "IDs not monotonically increasing!");
     }
     println!("All IDs are unique and monotonically increasing!");
-} 
+}

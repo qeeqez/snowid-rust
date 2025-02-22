@@ -3,27 +3,28 @@ use snowid::{SnowID, SnowIDConfig};
 
 pub fn node_bits_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("Node Bits Comparison");
-    
+
     // Test different node bit lengths
     // This affects the balance between max nodes (2^node_bits) and sequences per ms (2^sequence_bits)
     for &node_bits in &[6, 8, 10, 12, 14, 16] {
-        let config = SnowIDConfig::builder()
-            .node_bits(node_bits)
-            .build();
-        
+        let config = SnowIDConfig::builder().node_bits(node_bits).build();
+
         // Calculate theoretical limits for documentation
         let max_nodes = 2u32.pow(node_bits as u32);
         let sequence_bits = 22 - node_bits; // Total bits for node+sequence is fixed at 22
         let max_sequence = 2u32.pow(sequence_bits as u32);
-        
+
         group.bench_function(
-            format!("bits_{}_nodes_{}_seq_{}", node_bits, max_nodes, max_sequence), 
+            format!(
+                "bits_{}_nodes_{}_seq_{}",
+                node_bits, max_nodes, max_sequence
+            ),
             |b| {
                 let mut generator = SnowID::with_config(1, config).unwrap();
                 b.iter(|| {
                     black_box(generator.generate());
                 });
-            }
+            },
         );
     }
 

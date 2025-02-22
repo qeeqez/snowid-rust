@@ -17,10 +17,12 @@ mod tests {
         for _ in 0..num_threads {
             let gen = Arc::clone(&generator);
             handles.push(thread::spawn(move || {
-                (0..ids_per_thread).map(|_| {
-                    let mut gen = gen.lock().unwrap();
-                    gen.generate()
-                }).collect::<Vec<_>>()
+                (0..ids_per_thread)
+                    .map(|_| {
+                        let mut gen = gen.lock().unwrap();
+                        gen.generate()
+                    })
+                    .collect::<Vec<_>>()
             }));
         }
 
@@ -32,9 +34,11 @@ mod tests {
         }
 
         // Verify no duplicates were generated
-        assert_eq!(all_ids.len(), num_threads * ids_per_thread, 
-            "Expected {} unique IDs, but got {}", 
-            num_threads * ids_per_thread, 
+        assert_eq!(
+            all_ids.len(),
+            num_threads * ids_per_thread,
+            "Expected {} unique IDs, but got {}",
+            num_threads * ids_per_thread,
             all_ids.len()
         );
 
@@ -42,9 +46,12 @@ mod tests {
         let mut ids: Vec<_> = all_ids.into_iter().collect();
         ids.sort_unstable();
         for i in 1..ids.len() {
-            assert!(ids[i] > ids[i-1], 
+            assert!(
+                ids[i] > ids[i - 1],
                 "ID at position {} ({}) is not greater than previous ID ({})",
-                i, ids[i], ids[i-1]
+                i,
+                ids[i],
+                ids[i - 1]
             );
         }
     }
@@ -62,9 +69,11 @@ mod tests {
         }
 
         // Verify expected number of unique IDs
-        assert_eq!(ids.len(), iterations, 
-            "Expected {} unique IDs, but got {}", 
-            iterations, 
+        assert_eq!(
+            ids.len(),
+            iterations,
+            "Expected {} unique IDs, but got {}",
+            iterations,
             ids.len()
         );
     }
@@ -79,7 +88,7 @@ mod tests {
             let (timestamp, _, _) = generator.extract.decompose(snowid);
             assert!(timestamp >= last_timestamp);
             last_timestamp = timestamp;
-            
+
             // Add small delay to ensure timestamp changes
             thread::sleep(Duration::from_millis(1));
         }

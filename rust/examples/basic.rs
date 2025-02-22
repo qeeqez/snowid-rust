@@ -29,4 +29,4 @@ fn main() {
     println!("  Timestamp: {} ms since epoch", ts);
     println!("  Node ID: {}", node);
     println!("  Sequence: {}", seq);
-} 
+}

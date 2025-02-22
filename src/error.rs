@@ -1,4 +1,3 @@
-use std::fmt;
 use thiserror::Error;
 
 /// Represents errors that can occur during SnowID operations
@@ -11,21 +10,6 @@ pub enum SnowIDError {
     #[error("Clock moved backwards. Refusing to generate id for {delta} milliseconds")]
     ClockMovedBackwards { delta: i64 },
 }
-
-impl fmt::Display for SnowIDError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SnowIDError::InvalidNodeId { node_id, max } => {
-                write!(f, "Node ID {} is invalid. Maximum allowed value is {}", node_id, max)
-            }
-            SnowIDError::ClockMovedBackwards { delta } => {
-                write!(f, "Clock moved backwards. Refusing to generate id for {} milliseconds", delta)
-            }
-        }
-    }
-}
-
-impl std::error::Error for SnowIDError {}
 
 #[cfg(test)]
 mod tests {

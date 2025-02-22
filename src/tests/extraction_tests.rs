@@ -35,10 +35,10 @@ mod tests {
         assert_eq!(generator.max_sequence(), 1023);
 
         // Generate and verify components
-        let SnowID = generator.generate();
+        let snowid = generator.generate();
         
-        assert!(generator.extract.node(SnowID) <= 4095, "Node ID exceeds maximum");
-        assert!(generator.extract.sequence(SnowID) <= 1023, "Sequence exceeds maximum");
+        assert!(generator.extract.node(snowid) <= 4095, "Node ID exceeds maximum");
+        assert!(generator.extract.sequence(snowid) <= 1023, "Sequence exceeds maximum");
     }
 
     #[test]
@@ -66,8 +66,8 @@ mod tests {
             .build();
 
         let mut generator = SnowID::with_config(1, config).unwrap();
-        let SnowID = generator.generate();
-        let timestamp = generator.extract.timestamp(SnowID);
+        let snowid = generator.generate();
+        let timestamp = generator.extract.timestamp(snowid);
 
         // The extracted timestamp should be relative to custom epoch
         assert!(timestamp > 0);

@@ -75,8 +75,8 @@ mod tests {
         let mut last_timestamp = 0;
 
         for _ in 0..100 {
-            let SnowID = generator.generate();
-            let (timestamp, _, _) = generator.extract.decompose(SnowID);
+            let snowid = generator.generate();
+            let (timestamp, _, _) = generator.extract.decompose(snowid);
             assert!(timestamp >= last_timestamp);
             last_timestamp = timestamp;
             

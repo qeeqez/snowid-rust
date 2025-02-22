@@ -12,8 +12,8 @@ fn test_sequence_rollover() {
     
     // Generate IDs until we see the sequence reset
     for i in 0..10000 {
-        let SnowID = generator.generate();
-        let (ts, _, seq) = generator.extract.decompose(SnowID);
+        let showid = generator.generate();
+        let (ts, _, seq) = generator.extract.decompose(showid);
         
         // Track highest sequence number seen
         max_sequence_seen = max_sequence_seen.max(seq);
@@ -51,8 +51,8 @@ fn test_sequence_overflow_handling() {
     
     // Generate IDs rapidly to force sequence overflow
     for _ in 0..10000 {
-        let SnowID = generator.generate();
-        let (ts, _, sequence) = generator.extract.decompose(SnowID);
+        let snowid = generator.generate();
+        let (ts, _, sequence) = generator.extract.decompose(snowid);
         
         if let (Some(prev_ts), Some(prev_seq)) = (last_ts, last_sequence) {
             if ts == prev_ts {
@@ -91,8 +91,8 @@ fn test_sequence_restart() {
 
     // Generate IDs rapidly to force sequence increment
     for _ in 0..100 {
-        let SnowID = generator.generate();
-        let (timestamp, _, sequence) = generator.extract.decompose(SnowID);
+        let snowid = generator.generate();
+        let (timestamp, _, sequence) = generator.extract.decompose(snowid);
         
         if let (Some(last_seq), Some(last_ts)) = (last_sequence, last_timestamp) {
             if timestamp == last_ts {

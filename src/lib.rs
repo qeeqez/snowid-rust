@@ -19,7 +19,7 @@ pub struct SnowID {
     node_id: u16,
     config: SnowIDConfig,
     pub extract: SnowIDExtractor,
-    last_timestamp: i64,
+    last_timestamp: u64,
     sequence: u16,
 }
 
@@ -57,7 +57,7 @@ impl SnowID {
 
         Ok(Self {
             node_id,
-            extract: SnowIDExtractor::new(config.node_bits(), config.sequence_bits()),
+            extract: SnowIDExtractor::new(config),
             config,
             last_timestamp: 0,
             sequence: 0,
@@ -72,7 +72,7 @@ impl SnowID {
         let timestamp = self.get_time_since_epoch();
 
         if timestamp > self.last_timestamp as u64 {
-            self.last_timestamp = timestamp as i64;
+            self.last_timestamp = timestamp;
             self.sequence = 0;
         } else {
             // For same timestamp or backwards clock, increment sequence
@@ -80,12 +80,12 @@ impl SnowID {
             if self.sequence > self.config.max_sequence() {
                 // Sequence exhausted, wait for next millisecond
                 // If clock moved backwards, wait from last timestamp
-                let wait_from = if timestamp == self.last_timestamp as u64 {
+                let wait_from = if timestamp == self.last_timestamp {
                     timestamp
                 } else {
-                    self.last_timestamp as u64
+                    self.last_timestamp
                 };
-                self.last_timestamp = self.wait_next_millis(wait_from) as i64;
+                self.last_timestamp = self.wait_next_millis(wait_from);
                 self.sequence = 0;
             }
         }

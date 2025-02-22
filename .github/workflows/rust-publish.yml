@@ -16,7 +16,7 @@ jobs:
           - os: ubuntu-latest
             artifact_name: snowid-linux
             asset_name: snowid-linux-amd64
-          - os: ubuntu-24.04-arm64
+          - os: ubuntu-24.04-arm
             artifact_name: snowid-linux-arm64
             asset_name: snowid-linux-arm64
           - os: windows-latest

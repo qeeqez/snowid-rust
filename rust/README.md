@@ -1,7 +1,5 @@
 # ❄️ SnowID Rust
 
-# Commit to trigger gh actions
-
 [![Crates.io](https://img.shields.io/crates/v/snowid-rust.svg)](https://crates.io/crates/snowid-rust)
 [![Documentation](https://docs.rs/snowid-rust/badge.svg)](https://docs.rs/snowid-rust)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

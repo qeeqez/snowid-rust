@@ -1,4 +1,4 @@
-# 🆔 SnowID Rust
+# ❄️ SnowID Rust
 
 [![Crates.io](https://img.shields.io/crates/v/snowid-rust.svg)](https://crates.io/crates/snowid-rust)
 [![Documentation](https://docs.rs/snowid-rust/badge.svg)](https://docs.rs/snowid-rust)
@@ -6,7 +6,7 @@
 
 > A Rust implementation of a Snowflake-like ID generator with 42-bit timestamp.
 
-Generate 64-bit unique identifiers that are:
+**Generate 64-bit unique identifiers that are:**
 - ⚡️ Fast (~244ns per ID)
 - 📈 Time-sorted
 - 🔄 Monotonic
@@ -16,7 +16,9 @@ Generate 64-bit unique identifiers that are:
 
 ## 🧮 ID Structure
 
-Default configuration:
+**Example ID**: 151819733950271234
+
+**Default configuration:**
 ```text
 |------------------------------------------|------------|------------|
 |           TIMESTAMP (42 bits)            | NODE (10)  |  SEQ (12)  |
@@ -46,13 +48,42 @@ fn main() {
 ## 🔧 Configuration
 
 ```rust
-let config = SnowIDConfig::builder()
-    .custom_epoch(1577836800000) // 2020-01-01 00:00:00 UTC
-    .node_bits(10)
-    .sequence_bits(12)
-    .build();
+use snowid::{SnowID, SnowIDConfig};
 
-let gen = SnowID::with_config(1, config).unwrap();
+fn main() {
+    // Create custom configuration
+    let config = SnowIDConfig::builder()
+        .custom_epoch(1577836800000) // 2020-01-01 00:00:00 UTC
+        .node_bits(10)               // Supports up to 1024 nodes
+        .build();
+
+    // Create generator with custom config
+    let mut gen = SnowID::with_config(1, config).unwrap();
+}
+```
+
+### ℹ️ Available Methods
+```rust
+use snowid::SnowID;
+
+fn main() {
+    let mut gen = SnowID::new(1).unwrap();
+    let id = gen.generate();
+
+    // Extract individual components
+    let timestamp = gen.extract.timestamp(id);  // Get timestamp from ID
+    let node = gen.extract.node(id);           // Get node ID from ID
+    let sequence = gen.extract.sequence(id);    // Get sequence from ID
+
+    // Extract all components at once
+    let (ts, node, seq) = gen.extract.decompose(id);
+
+    // Configuration information
+    let max_node = gen.max_node_id();          // Get maximum allowed node ID
+    let node_bits = gen.node_bits();           // Get number of bits used for node ID
+    let max_seq = gen.config.max_sequence();    // Get maximum sequence per millisecond
+    let timestamp_bits = SnowID::TIMESTAMP_BITS; // Get number of bits used for timestamp (42)
+}
 ```
 
 ## 📊 Performance & Comparisons

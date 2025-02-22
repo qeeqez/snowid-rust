@@ -21,10 +21,10 @@ pub struct Tsid {
 
 impl Tsid {
     /// Create a new TSID generator with default configuration
-    /// 
+    ///
     /// # Arguments
     /// * `node_id` - Node ID for this generator
-    /// 
+    ///
     /// # Returns
     /// * `Result<Tsid, Error>` - New TSID generator or error if node_id is invalid
     pub fn new(node_id: u16) -> Result<Self, TsidError> {
@@ -32,11 +32,11 @@ impl Tsid {
     }
 
     /// Create a new TSID generator with custom configuration
-    /// 
+    ///
     /// # Arguments
     /// * `node_id` - Node ID for this generator
     /// * `config` - Custom configuration for the generator
-    /// 
+    ///
     /// # Returns
     /// * `Result<Tsid, Error>` - New TSID generator or error if node_id is invalid
     pub fn with_config(node_id: u16, config: TsidConfig) -> Result<Self, TsidError> {
@@ -57,7 +57,7 @@ impl Tsid {
     }
 
     /// Generate a new TSID
-    /// 
+    ///
     /// # Returns
     /// * `u64` - New TSID value
     pub fn generate(&mut self) -> u64 {
@@ -72,7 +72,11 @@ impl Tsid {
             if self.last_sequence > self.config.max_sequence() {
                 // Sequence exhausted, wait for next millisecond
                 // If clock moved backwards, wait from last timestamp
-                let wait_from = if timestamp == self.last_timestamp { timestamp } else { self.last_timestamp };
+                let wait_from = if timestamp == self.last_timestamp {
+                    timestamp
+                } else {
+                    self.last_timestamp
+                };
                 self.last_timestamp = self.wait_next_millis(wait_from);
                 self.last_sequence = 0;
             }
@@ -138,64 +142,3 @@ impl Tsid {
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(test)]
-mod lib_tests {
-    use super::*;
-    use std::thread;
-    use std::time::Duration;
-
-    #[test]
-    fn test_clock_backwards() {
-        let mut generator = Tsid::new(1).unwrap();
-        let tsid1 = generator.generate();
-        
-        // Simulate clock moving backwards by saving current timestamp
-        let original_timestamp = generator.last_timestamp;
-        
-        // Generate another ID - it should handle backwards clock gracefully
-        let tsid2 = generator.generate();
-        
-        assert!(tsid2 > tsid1, "Second TSID should be greater than first");
-        
-        let (ts1, _, seq1) = generator.extract.decompose(tsid1);
-        let (ts2, _, seq2) = generator.extract.decompose(tsid2);
-        
-        if ts1 == ts2 {
-            assert!(seq2 > seq1, "Sequence should increment when timestamp is same");
-        } else {
-            assert!(ts2 >= original_timestamp, "Timestamp should not go backwards");
-        }
-    }
-
-    #[test]
-    fn test_sequence_overflow() {
-        let mut generator = Tsid::new(1).unwrap();
-        let mut last_sequence = None;
-        let mut last_timestamp = None;
-        
-        // Generate IDs rapidly to force sequence overflow
-        for _ in 0..5000 {
-            let tsid = generator.generate();
-            let (timestamp, _, sequence) = generator.extract.decompose(tsid);
-            
-            if let (Some(last_seq), Some(last_ts)) = (last_sequence, last_timestamp) {
-                if timestamp == last_ts {
-                    assert!(sequence > last_seq || sequence == 0, 
-                        "Sequence should either increment or reset to 0");
-                } else {
-                    assert!(timestamp > last_ts, "Timestamp should increase");
-                    assert_eq!(sequence, 0, "Sequence should reset on timestamp change");
-                }
-            }
-            
-            last_sequence = Some(sequence);
-            last_timestamp = Some(timestamp);
-            
-            // Add small delay occasionally
-            if sequence % 100 == 0 {
-                thread::sleep(Duration::from_micros(1));
-            }
-        }
-    }
-}

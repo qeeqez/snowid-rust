@@ -1,9 +1,9 @@
+use rand::{rng, Rng};
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use std::collections::HashSet;
 use tsid_rust::Tsid;
-use rand::Rng;
 
 fn main() {
     // Create a thread-safe generator with Mutex for mutable access
@@ -15,8 +15,8 @@ fn main() {
         let gen = Arc::clone(&generator);
         handles.push(thread::spawn(move || {
             let mut ids = HashSet::new();
-            let mut rng = rand::thread_rng();
-            
+            let mut rng = rng();
+
             // Generate some IDs with random delays
             for i in 0..5 {
                 // Lock the generator to generate ID
@@ -40,7 +40,8 @@ fn main() {
                 assert!(ids.insert(id), "Duplicate ID generated!");
                 
                 // Random delay to simulate work
-                thread::sleep(Duration::from_millis(rng.gen_range(0..10)));
+                let delay = rng.random_range(0..=9);
+                thread::sleep(Duration::from_millis(delay));
             }
             ids
         }));

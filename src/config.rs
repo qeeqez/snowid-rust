@@ -8,31 +8,102 @@ pub const DEFAULT_CUSTOM_EPOCH: u64 = 1704067200000; // January 1, 2024 UTC
 #[derive(Debug, Clone, Copy)]
 pub struct TsidConfig {
     pub(crate) node_bits: u8,
-    pub(crate) sequence_bits: u8,
     pub(crate) custom_epoch: u64,
+    timestamp_shift: u8,
+    node_shift: u8,
+    timestamp_mask: u64,
+    node_mask: u16,
+    sequence_mask: u16,
+}
+
+impl TsidConfig {
+    /// Create new TsidConfig with given node bits
+    fn new(node_bits: u8, custom_epoch: u64) -> Self {
+        let sequence_bits = TOTAL_NODE_AND_SEQUENCE_BITS - node_bits;
+        Self {
+            node_bits,
+            custom_epoch,
+            timestamp_shift: TOTAL_NODE_AND_SEQUENCE_BITS,
+            node_shift: sequence_bits,
+            timestamp_mask: (1 << TIMESTAMP_BITS) - 1,
+            node_mask: (1 << node_bits) - 1,
+            sequence_mask: (1 << sequence_bits) - 1,
+        }
+    }
+
+    /// Create a new configuration builder
+    pub fn builder() -> TsidConfigBuilder {
+        TsidConfigBuilder::new()
+    }
+
+    /// Get sequence bits derived from node bits
+    #[inline]
+    pub fn sequence_bits(&self) -> u8 {
+        TOTAL_NODE_AND_SEQUENCE_BITS - self.node_bits
+    }
+
+    /// Get the maximum node ID supported by the current configuration
+    #[inline]
+    pub fn max_node_id(&self) -> u16 {
+        self.node_mask
+    }
+
+    /// Get the maximum sequence number supported by the current configuration
+    #[inline]
+    pub fn max_sequence(&self) -> u16 {
+        self.sequence_mask
+    }
+
+    /// Get timestamp shift for internal use
+    #[inline]
+    pub(crate) fn timestamp_shift(&self) -> u8 {
+        self.timestamp_shift
+    }
+
+    /// Get node shift for internal use
+    #[inline]
+    pub(crate) fn node_shift(&self) -> u8 {
+        self.node_shift
+    }
+
+    /// Get timestamp mask for internal use
+    #[inline]
+    pub(crate) fn timestamp_mask(&self) -> u64 {
+        self.timestamp_mask
+    }
+
+    /// Get node mask for internal use
+    #[inline]
+    pub(crate) fn node_mask(&self) -> u16 {
+        self.node_mask
+    }
+
+    /// Get sequence mask for internal use
+    #[inline]
+    pub(crate) fn sequence_mask(&self) -> u16 {
+        self.sequence_mask
+    }
 }
 
 impl Default for TsidConfig {
     fn default() -> Self {
-        Self {
-            node_bits: DEFAULT_NODE_BITS,
-            sequence_bits: TOTAL_NODE_AND_SEQUENCE_BITS - DEFAULT_NODE_BITS,
-            custom_epoch: DEFAULT_CUSTOM_EPOCH,
-        }
+        Self::new(DEFAULT_NODE_BITS, DEFAULT_CUSTOM_EPOCH)
     }
 }
 
 /// Builder for TsidConfig
 #[derive(Debug)]
 pub struct TsidConfigBuilder {
-    config: TsidConfig,
+    node_bits: u8,
+    custom_epoch: u64,
 }
 
 impl TsidConfigBuilder {
     /// Create a new TsidConfigBuilder with default values
     pub fn new() -> Self {
         Self {
-            config: TsidConfig::default(),
+            node_bits: DEFAULT_NODE_BITS,
+            custom_epoch: DEFAULT_CUSTOM_EPOCH,
         }
     }
 
@@ -49,26 +120,7 @@ impl TsidConfigBuilder {
     /// Panics if bits is not between 1 and 20
     pub fn node_bits(mut self, bits: u8) -> Self {
         assert!(bits > 0 && bits <= 20, "Node bits must be between 1 and 20");
-        self.config.node_bits = bits;
-        self.config.sequence_bits = TOTAL_NODE_AND_SEQUENCE_BITS - bits;
-        self
-    }
-
-    /// Set the number of bits for sequence (2-21)
-    /// Node bits will be automatically set to (22 - sequence_bits)
-    /// 
-    /// # Arguments
-    /// * `bits` - Number of bits for sequence (2-21)
-    /// 
-    /// # Returns
-    /// * `Self` - Builder instance for chaining
-    /// 
-    /// # Panics
-    /// Panics if bits is not between 2 and 21
-    pub fn sequence_bits(mut self, bits: u8) -> Self {
-        assert!(bits >= 2 && bits <= 21, "Sequence bits must be between 2 and 21");
-        self.config.sequence_bits = bits;
-        self.config.node_bits = TOTAL_NODE_AND_SEQUENCE_BITS - bits;
+        self.node_bits = bits;
         self
     }
 
@@ -80,7 +132,7 @@ impl TsidConfigBuilder {
     /// # Returns
     /// * `Self` - Builder instance for chaining
     pub fn custom_epoch(mut self, epoch: u64) -> Self {
-        self.config.custom_epoch = epoch;
+        self.custom_epoch = epoch;
         self
     }
 
@@ -89,47 +141,8 @@ impl TsidConfigBuilder {
     /// # Returns
     /// * `TsidConfig` - The configured TsidConfig instance
     pub fn build(self) -> TsidConfig {
-        self.config
+        TsidConfig::new(self.node_bits, self.custom_epoch)
     }
-}
-
-impl TsidConfig {
-    /// Create a new configuration builder
-    pub fn builder() -> TsidConfigBuilder {
-        TsidConfigBuilder::new()
-    }
-
-    /// Create masks and shifts based on configuration
-    pub(crate) fn create_bit_config(&self) -> BitConfig {
-        let node_shift = self.sequence_bits;
-        let timestamp_shift = self.node_bits + self.sequence_bits;
-
-        let sequence_mask = (1 << self.sequence_bits) - 1;
-        let node_mask = (1 << self.node_bits) - 1;
-        let timestamp_mask = (1u64 << TIMESTAMP_BITS) - 1;
-
-        BitConfig {
-            node_shift,
-            timestamp_shift,
-            sequence_mask,
-            node_mask,
-            timestamp_mask,
-            max_sequence: sequence_mask,
-            max_node: node_mask,
-        }
-    }
-}
-
-/// Internal bit configuration
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct BitConfig {
-    pub(crate) node_shift: u8,
-    pub(crate) timestamp_shift: u8,
-    pub(crate) sequence_mask: u16,
-    pub(crate) node_mask: u16,
-    pub(crate) timestamp_mask: u64,
-    pub(crate) max_sequence: u16,
-    pub(crate) max_node: u16,
 }
 
 #[cfg(test)]
@@ -144,7 +157,7 @@ mod tests {
             .build();
 
         assert_eq!(config.node_bits, 12);
-        assert_eq!(config.sequence_bits, 10); // 22 - 12
+        assert_eq!(config.sequence_bits(), 10); // 22 - 12
         assert_eq!(config.custom_epoch, 1640995200000);
     }
 
@@ -152,7 +165,7 @@ mod tests {
     fn test_default_config() {
         let config = TsidConfig::default();
         assert_eq!(config.node_bits, DEFAULT_NODE_BITS);
-        assert_eq!(config.sequence_bits, TOTAL_NODE_AND_SEQUENCE_BITS - DEFAULT_NODE_BITS);
+        assert_eq!(config.sequence_bits(), TOTAL_NODE_AND_SEQUENCE_BITS - DEFAULT_NODE_BITS);
         assert_eq!(config.custom_epoch, DEFAULT_CUSTOM_EPOCH);
     }
 
@@ -165,14 +178,12 @@ mod tests {
     #[test]
     fn test_bit_config() {
         let config = TsidConfig::default();
-        let bit_config = config.create_bit_config();
-
-        assert_eq!(bit_config.node_shift, 12);
-        assert_eq!(bit_config.timestamp_shift, 22);
-        assert_eq!(bit_config.sequence_mask, 0xFFF);
-        assert_eq!(bit_config.node_mask, 0x3FF);
-        assert_eq!(bit_config.timestamp_mask, (1u64 << 42) - 1);
-        assert_eq!(bit_config.max_sequence, 0xFFF);
-        assert_eq!(bit_config.max_node, 0x3FF);
+        assert_eq!(config.node_shift(), 12);
+        assert_eq!(config.timestamp_shift(), 22);
+        assert_eq!(config.sequence_mask(), 0xFFF);
+        assert_eq!(config.node_mask(), 0x3FF);
+        assert_eq!(config.timestamp_mask(), (1u64 << 42) - 1);
+        assert_eq!(config.max_sequence(), 0xFFF);
+        assert_eq!(config.max_node_id(), 0x3FF);
     }
 }

@@ -8,7 +8,7 @@ mod tests {
 
     #[test]
     fn test_concurrent_generation() {
-        let generator = Arc::new(TsidGenerator::new(1).unwrap());
+        let generator = Arc::new(Tsid::new(1).unwrap());
         let generator = Arc::new(generator);
         let mut handles = vec![];
         let num_threads = 4;
@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn test_rapid_generation() {
-        let generator = TsidGenerator::new(1).unwrap();
+        let generator = Tsid::new(1).unwrap();
         let mut ids = HashSet::new();
         let iterations = 1000;
 
@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn test_timestamp_monotonicity() {
-        let generator = TsidGenerator::new(1).unwrap();
+        let generator = Tsid::new(1).unwrap();
         let mut last_timestamp = 0;
 
         for _ in 0..100 {

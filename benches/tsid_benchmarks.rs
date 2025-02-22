@@ -1,22 +1,38 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::sync::Arc;
 use std::thread;
-use tsid_rust::TsidGenerator;
+use tsid_rust::Tsid;
 
-fn bench_single_thread_generation(c: &mut Criterion) {
+pub fn single_thread_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Single Thread");
-    let generator = TsidGenerator::new(1);
+    let generator = Tsid::new(1).unwrap();
 
     group.bench_function("generate_id", |b| {
         b.iter(|| {
-            black_box(generator.generate());
+            black_box(generator.generate().unwrap());
         });
     });
 
     group.bench_function("generate_100_sequential", |b| {
         b.iter(|| {
             for _ in 0..100 {
-                black_box(generator.generate());
+                black_box(generator.generate().unwrap());
+            }
+        });
+    });
+
+    group.bench_function("generate_1000_sequential", |b| {
+        b.iter(|| {
+            for _ in 0..1000 {
+                black_box(generator.generate().unwrap());
+            }
+        });
+    });
+
+    group.bench_function("generate_10000_sequential", |b| {
+        b.iter(|| {
+            for _ in 0..10000 {
+                black_box(generator.generate().unwrap());
             }
         });
     });
@@ -24,62 +40,55 @@ fn bench_single_thread_generation(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_concurrent_generation(c: &mut Criterion) {
+pub fn concurrent_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Concurrent");
-    
-    // Test different numbers of threads
-    for threads in [2, 4, 8].iter() {
-        group.bench_with_input(
-            BenchmarkId::new("threads", threads), 
-            threads,
-            |b, &threads| {
-                b.iter(|| {
-                    let generator = Arc::new(TsidGenerator::new(1));
-                    let mut handles = vec![];
-                    
-                    for _ in 0..threads {
-                        let gen = generator.clone();
-                        handles.push(thread::spawn(move || {
-                            for _ in 0..100 {
-                                black_box(gen.generate());
-                            }
-                        }));
-                    }
-                    
-                    for handle in handles {
-                        handle.join().unwrap();
-                    }
-                });
-            },
-        );
+
+    for &thread_count in &[2, 4, 8] {
+        group.bench_function(format!("threads/{}", thread_count), |b| {
+            b.iter(|| {
+                let generator = Arc::new(Tsid::new(1).unwrap());
+                let mut handles = Vec::with_capacity(thread_count);
+
+                for _ in 0..thread_count {
+                    let gen = Arc::clone(&generator);
+                    handles.push(thread::spawn(move || {
+                        for _ in 0..100 {
+                            black_box(gen.generate().unwrap());
+                        }
+                    }));
+                }
+
+                for handle in handles {
+                    handle.join().unwrap();
+                }
+            });
+        });
     }
 
     group.finish();
 }
 
-fn bench_component_extraction(c: &mut Criterion) {
+pub fn component_extraction_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Component Extraction");
-    let generator = TsidGenerator::new(1);
-    let tsid = generator.generate();
+    let generator = Tsid::new(1).unwrap();
+    let tsid = generator.generate().unwrap();
 
     group.bench_function("extract_components", |b| {
         b.iter(|| {
-            black_box(tsid_rust::extract_from_tsid(black_box(tsid)));
+            black_box(generator.extract.decompose(black_box(tsid)));
         });
     });
 
     group.finish();
 }
 
-fn bench_multiple_nodes(c: &mut Criterion) {
+pub fn multiple_nodes_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Multiple Nodes");
-    let generators: Vec<_> = (0..4).map(|i| TsidGenerator::new(i)).collect();
+    let generator = Tsid::new(1).unwrap();
 
     group.bench_function("generate_across_nodes", |b| {
         b.iter(|| {
-            for gen in &generators {
-                black_box(gen.generate());
-            }
+            black_box(generator.generate().unwrap());
         });
     });
 
@@ -88,9 +97,9 @@ fn bench_multiple_nodes(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    bench_single_thread_generation,
-    bench_concurrent_generation,
-    bench_component_extraction,
-    bench_multiple_nodes
+    single_thread_benchmarks,
+    concurrent_benchmarks,
+    component_extraction_benchmarks,
+    multiple_nodes_benchmarks
 );
 criterion_main!(benches);

@@ -9,34 +9,31 @@ mod extractor;
 
 pub use config::{TsidConfig, DEFAULT_NODE_BITS, DEFAULT_CUSTOM_EPOCH};
 pub use error::TsidError;
-use config::BitConfig;
 use extractor::TsidExtractor;
 
 /// TSID Generator for creating unique, time-sorted IDs
-pub struct TsidGenerator {
+pub struct Tsid {
     node_id: u16,
     sequence: AtomicU16,
     last_timestamp: AtomicU64,
     config: TsidConfig,
-    bit_config: BitConfig,
     /// Extractor for getting components from TSID
     pub extract: TsidExtractor,
 }
 
-impl Clone for TsidGenerator {
+impl Clone for Tsid {
     fn clone(&self) -> Self {
         Self {
             node_id: self.node_id,
             sequence: AtomicU16::new(self.sequence.load(Ordering::Relaxed)),
             last_timestamp: AtomicU64::new(self.last_timestamp.load(Ordering::Relaxed)),
             config: self.config,
-            bit_config: self.bit_config,
-            extract: TsidExtractor::new(self.bit_config),
+            extract: TsidExtractor::new(self.config),
         }
     }
 }
 
-impl TsidGenerator {
+impl Tsid {
     /// Create a new TSID generator with the given node ID and default configuration
     ///
     /// # Arguments
@@ -57,11 +54,10 @@ impl TsidGenerator {
     /// # Returns
     /// * `Result<Self, TsidError>` - A new TSID generator or an error if node_id is invalid
     pub fn with_config(node_id: u16, config: TsidConfig) -> Result<Self, TsidError> {
-        let bit_config = config.create_bit_config();
-        if node_id > bit_config.max_node {
+        if node_id > config.max_node_id() {
             return Err(TsidError::InvalidNodeId {
                 node_id,
-                max_allowed: bit_config.max_node,
+                max_allowed: config.max_node_id(),
             });
         }
 
@@ -70,12 +66,14 @@ impl TsidGenerator {
             sequence: AtomicU16::new(0),
             last_timestamp: AtomicU64::new(0),
             config,
-            bit_config,
-            extract: TsidExtractor::new(bit_config),
+            extract: TsidExtractor::new(config),
         })
     }
 
     /// Generate a new TSID
+    ///
+    /// This is an instance method and must be called on a Tsid instance, not the Tsid type.
+    /// Use Tsid::new() or Tsid::with_config() to create a Tsid instance first.
     ///
     /// # Returns
     /// * `Result<u64, TsidError>` - A new TSID or an error if generation fails
@@ -107,7 +105,7 @@ impl TsidGenerator {
             
             let seq = self.sequence.fetch_add(1, Ordering::AcqRel);
             
-            if seq < self.bit_config.max_sequence {
+            if seq < self.config.max_sequence() {
                 return Ok(self.create_tsid(current_ts, seq + 1));
             }
             
@@ -130,19 +128,19 @@ impl TsidGenerator {
     #[inline]
     /// Create a TSID from components using the configured bit layout
     fn create_tsid(&self, timestamp: u64, sequence: u16) -> u64 {
-        ((timestamp & self.bit_config.timestamp_mask) << self.bit_config.timestamp_shift)
-            | ((self.node_id as u64 & self.bit_config.node_mask as u64) << self.bit_config.node_shift)
-            | (sequence as u64 & self.bit_config.sequence_mask as u64)
+        ((timestamp & self.config.timestamp_mask()) << self.config.timestamp_shift())
+            | ((self.node_id as u64 & self.config.node_mask() as u64) << self.config.node_shift())
+            | (sequence as u64 & self.config.sequence_mask() as u64)
     }
 
     /// Get the maximum node ID supported by the current configuration
     pub fn max_node_id(&self) -> u16 {
-        self.bit_config.max_node
+        self.config.max_node_id()
     }
 
     /// Get the maximum sequence number supported by the current configuration
     pub fn max_sequence(&self) -> u16 {
-        self.bit_config.max_sequence
+        self.config.max_sequence()
     }
 
     /// Get the current configuration

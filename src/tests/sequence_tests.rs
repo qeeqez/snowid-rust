@@ -4,7 +4,7 @@ use crate::*;
 
 #[test]
 fn test_sequence_rollover() {
-    let generator = TsidGenerator::new(1).unwrap();
+    let generator = Tsid::new(1).unwrap();
     let mut last_sequence = None;
     let mut last_timestamp = None;
     let mut max_sequence_seen = 0;
@@ -38,7 +38,7 @@ fn test_sequence_rollover() {
 
 #[test]
 fn test_sequence_overflow_handling() {
-    let generator = TsidGenerator::new(1).unwrap();
+    let generator = Tsid::new(1).unwrap();
     let mut last_sequence = None;
     let mut sequence_rollovers = 0;
     let mut last_timestamp = None;
@@ -72,7 +72,7 @@ fn test_sequence_overflow_handling() {
 
 #[test]
 fn test_sequence_restart() {
-    let generator = TsidGenerator::new(1).unwrap();
+    let generator = Tsid::new(1).unwrap();
     
     // Generate multiple IDs in the same millisecond
     let tsid1 = generator.generate().unwrap();
@@ -94,7 +94,7 @@ fn test_sequence_restart() {
 
 #[test]
 fn test_sequence_restart_on_overflow() {
-    let generator = TsidGenerator::new(1).unwrap();
+    let generator = Tsid::new(1).unwrap();
     let mut last_sequence = None;
     let mut last_timestamp = None;
     let mut sequence_restarts = 0;

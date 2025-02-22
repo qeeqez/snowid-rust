@@ -5,7 +5,7 @@ mod tests {
 
     #[test]
     fn test_tsid_components() {
-        let generator = TsidGenerator::new(42).unwrap();
+        let generator = Tsid::new(42).unwrap();
         let tsid = generator.generate().unwrap();
         let (timestamp, node, sequence) = generator.extract.decompose(tsid);
         
@@ -18,11 +18,10 @@ mod tests {
     fn test_bit_layout() {
         let config = TsidConfig::builder()
             .node_bits(12)
-            .sequence_bits(10)
             .custom_epoch(0)
             .build();
 
-        let generator = TsidGenerator::with_config(42, config).unwrap();
+        let generator = Tsid::with_config(42, config).unwrap();
         let tsid = generator.generate().unwrap();
 
         // Extract components
@@ -41,7 +40,7 @@ mod tests {
             .custom_epoch(DEFAULT_CUSTOM_EPOCH)
             .build();
 
-        let generator = TsidGenerator::with_config(1023, config).unwrap();
+        let generator = Tsid::with_config(1023, config).unwrap();
         assert_eq!(generator.max_node_id(), 4095);
         assert_eq!(generator.max_sequence(), 1023);
 
@@ -54,7 +53,7 @@ mod tests {
 
     #[test]
     fn test_sequential_generation() {
-        let generator = TsidGenerator::new(1).unwrap();
+        let generator = Tsid::new(1).unwrap();
         let tsid1 = generator.generate().unwrap();
         let tsid2 = generator.generate().unwrap();
         assert!(tsid2 > tsid1);
@@ -62,8 +61,8 @@ mod tests {
 
     #[test]
     fn test_unique_ids_across_nodes() {
-        let gen1 = TsidGenerator::new(1).unwrap();
-        let gen2 = TsidGenerator::new(2).unwrap();
+        let gen1 = Tsid::new(1).unwrap();
+        let gen2 = Tsid::new(2).unwrap();
         
         let mut ids = HashSet::new();
         
@@ -84,7 +83,7 @@ mod tests {
             .custom_epoch(custom_epoch)
             .build();
 
-        let generator = TsidGenerator::with_config(1, config).unwrap();
+        let generator = Tsid::with_config(1, config).unwrap();
         let tsid = generator.generate().unwrap();
         let (timestamp, _, _) = generator.extract.decompose(tsid);
 

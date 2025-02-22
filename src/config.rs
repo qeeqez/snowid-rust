@@ -26,8 +26,8 @@ impl TsidConfig {
             timestamp_shift: TOTAL_NODE_AND_SEQUENCE_BITS,
             node_shift: sequence_bits,
             timestamp_mask: (1 << TIMESTAMP_BITS) - 1,
-            node_mask: (1 << node_bits) - 1,
-            sequence_mask: (1 << sequence_bits) - 1,
+            node_mask: ((1u32 << node_bits) - 1) as u16,
+            sequence_mask: ((1u32 << sequence_bits) - 1) as u16,
         }
     }
 
@@ -114,19 +114,24 @@ impl TsidConfigBuilder {
         }
     }
 
-    /// Set the number of bits for node ID (1-20)
+    /// Set the number of bits for node ID (6-16)
     /// Sequence bits will be automatically set to (22 - node_bits)
     /// 
     /// # Arguments
-    /// * `bits` - Number of bits for node ID (1-20)
+    /// * `bits` - Number of bits for node ID (6-16)
     /// 
     /// # Returns
     /// * `Self` - Builder instance for chaining
     /// 
     /// # Panics
-    /// Panics if bits is not between 1 and 20
+    /// Panics if bits is not between 6 and 16 (inclusive)
+    /// 
+    /// # Note
+    /// The range is limited to 6-16 bits due to u16 constraints:
+    /// - Minimum 6 bits = 64 nodes (reasonable minimum for distributed systems)
+    /// - Maximum 16 bits = 65,536 nodes (u16 max value)
     pub fn node_bits(mut self, bits: u8) -> Self {
-        assert!(bits > 0 && bits <= 20, "Node bits must be between 1 and 20");
+        assert!(bits >= 6 && bits <= 16, "Node bits must be between 6 and 16");
         self.node_bits = bits;
         self
     }
@@ -156,6 +161,39 @@ impl TsidConfigBuilder {
 mod tests {
     use super::*;
 
+    mod node_bits_validation {
+        use super::*;
+
+        #[test]
+        fn test_valid_node_bits() {
+            // Test all valid node bits from 6 to 16
+            for bits in 6..=16 {
+                let config = TsidConfig::builder().node_bits(bits).build();
+                assert_eq!(config.node_bits(), bits);
+                assert_eq!(config.sequence_bits(), TOTAL_NODE_AND_SEQUENCE_BITS - bits);
+                assert_eq!(config.max_node_id(), ((1u32 << bits) - 1) as u16);
+            }
+        }
+
+        #[test]
+        #[should_panic(expected = "Node bits must be between 6 and 16")]
+        fn test_too_few_node_bits() {
+            TsidConfig::builder().node_bits(5).build();
+        }
+
+        #[test]
+        #[should_panic(expected = "Node bits must be between 6 and 16")]
+        fn test_too_many_node_bits() {
+            TsidConfig::builder().node_bits(17).build();
+        }
+
+        #[test]
+        #[should_panic(expected = "Node bits must be between 6 and 16")]
+        fn test_max_u8_node_bits() {
+            TsidConfig::builder().node_bits(u8::MAX).build();
+        }
+    }
+
     #[test]
     fn test_custom_config() {
         let config = TsidConfig::builder()
@@ -177,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Node bits must be between 1 and 20")]
+    #[should_panic(expected = "Node bits must be between 6 and 16")]
     fn test_invalid_node_bits() {
         TsidConfig::builder().node_bits(21).build();
     }

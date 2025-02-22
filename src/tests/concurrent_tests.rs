@@ -2,23 +2,25 @@
 mod tests {
     use crate::*;
     use std::collections::HashSet;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
 
     #[test]
     fn test_concurrent_generation() {
-        let generator = Arc::new(Tsid::new(1).unwrap());
-        let generator = Arc::new(generator);
+        let generator = Arc::new(Mutex::new(Tsid::new(1).unwrap()));
         let mut handles = vec![];
         let num_threads = 4;
         let ids_per_thread = 250;
 
         // Generate IDs concurrently
         for _ in 0..num_threads {
-            let gen = generator.clone();
+            let gen = Arc::clone(&generator);
             handles.push(thread::spawn(move || {
-                (0..ids_per_thread).map(|_| gen.generate().unwrap()).collect::<Vec<_>>()
+                (0..ids_per_thread).map(|_| {
+                    let mut gen = gen.lock().unwrap();
+                    gen.generate()
+                }).collect::<Vec<_>>()
             }));
         }
 
@@ -49,13 +51,13 @@ mod tests {
 
     #[test]
     fn test_rapid_generation() {
-        let generator = Tsid::new(1).unwrap();
+        let mut generator = Tsid::new(1).unwrap();
         let mut ids = HashSet::new();
         let iterations = 1000;
 
         // Generate IDs as fast as possible
         for _ in 0..iterations {
-            let id = generator.generate().unwrap();
+            let id = generator.generate();
             assert!(ids.insert(id), "Duplicate ID generated: {}", id);
         }
 
@@ -69,11 +71,11 @@ mod tests {
 
     #[test]
     fn test_timestamp_monotonicity() {
-        let generator = Tsid::new(1).unwrap();
+        let mut generator = Tsid::new(1).unwrap();
         let mut last_timestamp = 0;
 
         for _ in 0..100 {
-            let tsid = generator.generate().unwrap();
+            let tsid = generator.generate();
             let (timestamp, _, _) = generator.extract.decompose(tsid);
             assert!(timestamp >= last_timestamp);
             last_timestamp = timestamp;

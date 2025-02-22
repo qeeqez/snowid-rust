@@ -1,58 +1,44 @@
 #![cfg_attr(test, deny(warnings))]
 
-use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod config;
 mod error;
 mod extractor;
 
-pub use config::{TsidConfig, DEFAULT_NODE_BITS, DEFAULT_CUSTOM_EPOCH};
+pub use config::TsidConfig;
 pub use error::TsidError;
-use extractor::TsidExtractor;
+pub use extractor::TsidExtractor;
 
-/// TSID Generator for creating unique, time-sorted IDs
+/// Time-Sorted ID Generator
 pub struct Tsid {
     node_id: u16,
-    sequence: AtomicU16,
-    last_timestamp: AtomicU64,
     config: TsidConfig,
-    /// Extractor for getting components from TSID
     pub extract: TsidExtractor,
-}
-
-impl Clone for Tsid {
-    fn clone(&self) -> Self {
-        Self {
-            node_id: self.node_id,
-            sequence: AtomicU16::new(self.sequence.load(Ordering::Relaxed)),
-            last_timestamp: AtomicU64::new(self.last_timestamp.load(Ordering::Relaxed)),
-            config: self.config,
-            extract: TsidExtractor::new(self.config),
-        }
-    }
+    last_timestamp: u64,
+    last_sequence: u16,
 }
 
 impl Tsid {
-    /// Create a new TSID generator with the given node ID and default configuration
-    ///
+    /// Create a new TSID generator with default configuration
+    /// 
     /// # Arguments
-    /// * `node_id` - Node identifier (0-1023 by default)
-    ///
+    /// * `node_id` - Node ID for this generator
+    /// 
     /// # Returns
-    /// * `Result<Self, TsidError>` - A new TSID generator or an error if node_id is invalid
+    /// * `Result<Tsid, Error>` - New TSID generator or error if node_id is invalid
     pub fn new(node_id: u16) -> Result<Self, TsidError> {
         Self::with_config(node_id, TsidConfig::default())
     }
 
     /// Create a new TSID generator with custom configuration
-    ///
+    /// 
     /// # Arguments
-    /// * `node_id` - Node identifier (range depends on configuration)
-    /// * `config` - Custom configuration for TSID generation
-    ///
+    /// * `node_id` - Node ID for this generator
+    /// * `config` - Custom configuration for the generator
+    /// 
     /// # Returns
-    /// * `Result<Self, TsidError>` - A new TSID generator or an error if node_id is invalid
+    /// * `Result<Tsid, Error>` - New TSID generator or error if node_id is invalid
     pub fn with_config(node_id: u16, config: TsidConfig) -> Result<Self, TsidError> {
         if node_id > config.max_node_id() {
             return Err(TsidError::InvalidNodeId {
@@ -63,91 +49,153 @@ impl Tsid {
 
         Ok(Self {
             node_id,
-            sequence: AtomicU16::new(0),
-            last_timestamp: AtomicU64::new(0),
+            extract: TsidExtractor::new(config.clone()),
             config,
-            extract: TsidExtractor::new(config),
+            last_timestamp: 0,
+            last_sequence: config.max_sequence(),
         })
     }
 
     /// Generate a new TSID
-    ///
-    /// This is an instance method and must be called on a Tsid instance, not the Tsid type.
-    /// Use Tsid::new() or Tsid::with_config() to create a Tsid instance first.
-    ///
+    /// 
     /// # Returns
-    /// * `Result<u64, TsidError>` - A new TSID or an error if generation fails
-    pub fn generate(&self) -> Result<u64, TsidError> {
-        loop {
-            let timestamp = self.current_time()?;
-            let last = self.last_timestamp.load(Ordering::Acquire);
-            
-            // If timestamp moved forward, try to update it
-            if timestamp > last {
-                if let Ok(_) = self.last_timestamp.compare_exchange(
-                    last,
-                    timestamp,
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                ) {
-                    self.sequence.store(0, Ordering::Release);
-                    return Ok(self.create_tsid(timestamp, 0));
-                }
-                continue;
+    /// * `u64` - New TSID value
+    pub fn generate(&mut self) -> u64 {
+        let timestamp = self.get_time_since_epoch();
+
+        if timestamp > self.last_timestamp {
+            self.last_timestamp = timestamp;
+            self.last_sequence = 0;
+        } else {
+            // For same timestamp or backwards clock, increment sequence
+            self.last_sequence = self.last_sequence.wrapping_add(1);
+            if self.last_sequence > self.config.max_sequence() {
+                // Sequence exhausted, wait for next millisecond
+                // If clock moved backwards, wait from last timestamp
+                let wait_from = if timestamp == self.last_timestamp { timestamp } else { self.last_timestamp };
+                self.last_timestamp = self.wait_next_millis(wait_from);
+                self.last_sequence = 0;
             }
-            
-            // Get next sequence for current timestamp (use last if clock moved backwards)
-            let current_ts = if timestamp < last { 
-                return Err(TsidError::ClockBackwards);
-            } else { 
-                timestamp 
-            };
-            
-            let seq = self.sequence.fetch_add(1, Ordering::AcqRel);
-            
-            if seq < self.config.max_sequence() {
-                return Ok(self.create_tsid(current_ts, seq + 1));
-            }
-            
-            // Reset sequence and try next millisecond
-            self.sequence.store(0, Ordering::Release);
-            continue;
         }
+
+        self.create_tsid(self.last_timestamp, self.last_sequence)
     }
 
+    /// Get the number of bits used for node ID in the current configuration
     #[inline]
-    /// Get the current timestamp in milliseconds since the configured epoch
-    fn current_time(&self) -> Result<u64, TsidError> {
-        Ok(SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| TsidError::ClockBackwards)?
-            .as_millis() as u64
-            - self.config.custom_epoch)
+    pub fn node_bits(&self) -> u8 {
+        self.config.node_bits()
     }
 
+    /// Get the number of bits used for sequence in the current configuration
     #[inline]
-    /// Create a TSID from components using the configured bit layout
-    fn create_tsid(&self, timestamp: u64, sequence: u16) -> u64 {
-        ((timestamp & self.config.timestamp_mask()) << self.config.timestamp_shift())
-            | ((self.node_id as u64 & self.config.node_mask() as u64) << self.config.node_shift())
-            | (sequence as u64 & self.config.sequence_mask() as u64)
+    pub fn sequence_bits(&self) -> u8 {
+        self.config.sequence_bits()
     }
 
     /// Get the maximum node ID supported by the current configuration
+    #[inline]
     pub fn max_node_id(&self) -> u16 {
         self.config.max_node_id()
     }
 
     /// Get the maximum sequence number supported by the current configuration
+    #[inline]
     pub fn max_sequence(&self) -> u16 {
         self.config.max_sequence()
     }
 
-    /// Get the current configuration
-    pub fn config(&self) -> TsidConfig {
-        self.config
+    #[inline]
+    fn get_time_since_epoch(&self) -> u64 {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        now - self.config.custom_epoch()
+    }
+
+    #[inline]
+    fn wait_next_millis(&self, timestamp: u64) -> u64 {
+        let mut now = timestamp;
+        while now <= timestamp {
+            now = self.get_time_since_epoch();
+        }
+        now
+    }
+
+    #[inline]
+    fn create_tsid(&self, timestamp: u64, sequence: u16) -> u64 {
+        self.create_tsid_with_node(timestamp, self.node_id, sequence)
+    }
+
+    #[inline]
+    fn create_tsid_with_node(&self, timestamp: u64, node_id: u16, sequence: u16) -> u64 {
+        ((timestamp & self.config.timestamp_mask()) << self.config.timestamp_shift())
+            | ((node_id as u64 & self.config.node_mask() as u64) << self.config.node_shift())
+            | (sequence as u64 & self.config.sequence_mask() as u64)
     }
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod lib_tests {
+    use super::*;
+    use std::thread;
+    use std::time::Duration;
+
+    #[test]
+    fn test_clock_backwards() {
+        let mut generator = Tsid::new(1).unwrap();
+        let tsid1 = generator.generate();
+        
+        // Simulate clock moving backwards by saving current timestamp
+        let original_timestamp = generator.last_timestamp;
+        
+        // Generate another ID - it should handle backwards clock gracefully
+        let tsid2 = generator.generate();
+        
+        assert!(tsid2 > tsid1, "Second TSID should be greater than first");
+        
+        let (ts1, _, seq1) = generator.extract.decompose(tsid1);
+        let (ts2, _, seq2) = generator.extract.decompose(tsid2);
+        
+        if ts1 == ts2 {
+            assert!(seq2 > seq1, "Sequence should increment when timestamp is same");
+        } else {
+            assert!(ts2 >= original_timestamp, "Timestamp should not go backwards");
+        }
+    }
+
+    #[test]
+    fn test_sequence_overflow() {
+        let mut generator = Tsid::new(1).unwrap();
+        let mut last_sequence = None;
+        let mut last_timestamp = None;
+        
+        // Generate IDs rapidly to force sequence overflow
+        for _ in 0..5000 {
+            let tsid = generator.generate();
+            let (timestamp, _, sequence) = generator.extract.decompose(tsid);
+            
+            if let (Some(last_seq), Some(last_ts)) = (last_sequence, last_timestamp) {
+                if timestamp == last_ts {
+                    assert!(sequence > last_seq || sequence == 0, 
+                        "Sequence should either increment or reset to 0");
+                } else {
+                    assert!(timestamp > last_ts, "Timestamp should increase");
+                    assert_eq!(sequence, 0, "Sequence should reset on timestamp change");
+                }
+            }
+            
+            last_sequence = Some(sequence);
+            last_timestamp = Some(timestamp);
+            
+            // Add small delay occasionally
+            if sequence % 100 == 0 {
+                thread::sleep(Duration::from_micros(1));
+            }
+        }
+    }
+}

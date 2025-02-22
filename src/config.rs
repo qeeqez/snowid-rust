@@ -1,14 +1,14 @@
 /// Default configuration values
-pub const TIMESTAMP_BITS: u8 = 42; // Fixed timestamp bits
+const TIMESTAMP_BITS: u8 = 42; // Fixed timestamp bits
 const TOTAL_NODE_AND_SEQUENCE_BITS: u8 = 22; // Fixed total for node + sequence
-pub const DEFAULT_NODE_BITS: u8 = 10;
-pub const DEFAULT_CUSTOM_EPOCH: u64 = 1704067200000; // January 1, 2024 UTC
+const DEFAULT_NODE_BITS: u8 = 10;
+const DEFAULT_CUSTOM_EPOCH: u64 = 1704067200000; // January 1, 2024 UTC
 
 /// Configuration for TSID Generator
 #[derive(Debug, Clone, Copy)]
 pub struct TsidConfig {
-    pub(crate) node_bits: u8,
-    pub(crate) custom_epoch: u64,
+    node_bits: u8,
+    custom_epoch: u64,
     timestamp_shift: u8,
     node_shift: u8,
     timestamp_mask: u64,
@@ -42,6 +42,12 @@ impl TsidConfig {
         TOTAL_NODE_AND_SEQUENCE_BITS - self.node_bits
     }
 
+    /// Get node bits configuration
+    #[inline]
+    pub fn node_bits(&self) -> u8 {
+        self.node_bits
+    }
+
     /// Get the maximum node ID supported by the current configuration
     #[inline]
     pub fn max_node_id(&self) -> u16 {
@@ -54,34 +60,35 @@ impl TsidConfig {
         self.sequence_mask
     }
 
-    /// Get timestamp shift for internal use
+    // Internal methods used by Tsid and TsidExtractor
     #[inline]
     pub(crate) fn timestamp_shift(&self) -> u8 {
         self.timestamp_shift
     }
 
-    /// Get node shift for internal use
     #[inline]
     pub(crate) fn node_shift(&self) -> u8 {
         self.node_shift
     }
 
-    /// Get timestamp mask for internal use
     #[inline]
     pub(crate) fn timestamp_mask(&self) -> u64 {
         self.timestamp_mask
     }
 
-    /// Get node mask for internal use
     #[inline]
     pub(crate) fn node_mask(&self) -> u16 {
         self.node_mask
     }
 
-    /// Get sequence mask for internal use
     #[inline]
     pub(crate) fn sequence_mask(&self) -> u16 {
         self.sequence_mask
+    }
+
+    #[inline]
+    pub(crate) fn custom_epoch(&self) -> u64 {
+        self.custom_epoch
     }
 }
 
@@ -156,17 +163,17 @@ mod tests {
             .custom_epoch(1640995200000) // 2022-01-01
             .build();
 
-        assert_eq!(config.node_bits, 12);
+        assert_eq!(config.node_bits(), 12);
         assert_eq!(config.sequence_bits(), 10); // 22 - 12
-        assert_eq!(config.custom_epoch, 1640995200000);
+        assert_eq!(config.custom_epoch(), 1640995200000);
     }
 
     #[test]
     fn test_default_config() {
         let config = TsidConfig::default();
-        assert_eq!(config.node_bits, DEFAULT_NODE_BITS);
+        assert_eq!(config.node_bits(), DEFAULT_NODE_BITS);
         assert_eq!(config.sequence_bits(), TOTAL_NODE_AND_SEQUENCE_BITS - DEFAULT_NODE_BITS);
-        assert_eq!(config.custom_epoch, DEFAULT_CUSTOM_EPOCH);
+        assert_eq!(config.custom_epoch(), DEFAULT_CUSTOM_EPOCH);
     }
 
     #[test]

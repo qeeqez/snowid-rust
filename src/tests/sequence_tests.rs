@@ -4,14 +4,14 @@ use crate::*;
 
 #[test]
 fn test_sequence_rollover() {
-    let generator = Tsid::new(1).unwrap();
+    let mut generator = Tsid::new(1).unwrap();
     let mut last_sequence = None;
     let mut last_timestamp = None;
     let mut max_sequence_seen = 0;
     
     // Generate IDs until we see the sequence reset
     for _ in 0..1025 {
-        let tsid = generator.generate().unwrap();
+        let tsid = generator.generate();
         let (timestamp, _, sequence) = generator.extract.decompose(tsid);
         
         // Track highest sequence number seen
@@ -23,8 +23,8 @@ fn test_sequence_rollover() {
             if timestamp > last_ts && last_seq >= max_sequence_seen {
                 assert_eq!(sequence, 0, "Sequence should reset to 0 on timestamp change");
                 assert!(max_sequence_seen > 0, "Should have seen some sequence increment");
-                assert!(max_sequence_seen <= generator.max_sequence(), 
-                    "Sequence {} exceeded maximum {}", max_sequence_seen, generator.max_sequence());
+                assert!(max_sequence_seen <= generator.config.max_sequence(), 
+                    "Sequence {} exceeded maximum {}", max_sequence_seen, generator.config.max_sequence());
                 return; // Test passed - we found a sequence reset after hitting max
             }
         }
@@ -38,14 +38,14 @@ fn test_sequence_rollover() {
 
 #[test]
 fn test_sequence_overflow_handling() {
-    let generator = Tsid::new(1).unwrap();
+    let mut generator = Tsid::new(1).unwrap();
     let mut last_sequence = None;
     let mut sequence_rollovers = 0;
     let mut last_timestamp = None;
     
     // Generate enough IDs to force multiple sequence rollovers
     for _ in 0..5000 {
-        let tsid = generator.generate().unwrap();
+        let tsid = generator.generate();
         let (timestamp, _, sequence) = generator.extract.decompose(tsid);
         
         // Check for sequence rollover within the same timestamp
@@ -72,12 +72,12 @@ fn test_sequence_overflow_handling() {
 
 #[test]
 fn test_sequence_restart() {
-    let generator = Tsid::new(1).unwrap();
+    let mut generator = Tsid::new(1).unwrap();
     
     // Generate multiple IDs in the same millisecond
-    let tsid1 = generator.generate().unwrap();
-    let tsid2 = generator.generate().unwrap();
-    let tsid3 = generator.generate().unwrap();
+    let tsid1 = generator.generate();
+    let tsid2 = generator.generate();
+    let tsid3 = generator.generate();
     
     let (ts1, _, seq1) = generator.extract.decompose(tsid1);
     let (ts2, _, seq2) = generator.extract.decompose(tsid2);
@@ -94,14 +94,14 @@ fn test_sequence_restart() {
 
 #[test]
 fn test_sequence_restart_on_overflow() {
-    let generator = Tsid::new(1).unwrap();
+    let mut generator = Tsid::new(1).unwrap();
     let mut last_sequence = None;
     let mut last_timestamp = None;
     let mut sequence_restarts = 0;
     
     // Generate IDs until we see sequence restarts
     for _ in 0..5000 {
-        let tsid = generator.generate().unwrap();
+        let tsid = generator.generate();
         let (timestamp, _, sequence) = generator.extract.decompose(tsid);
         
         if let (Some(last_seq), Some(last_ts)) = (last_sequence, last_timestamp) {

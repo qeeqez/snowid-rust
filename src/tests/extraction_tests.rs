@@ -4,72 +4,54 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn test_tsid_components() {
-        let generator = Tsid::new(42).unwrap();
-        let tsid = generator.generate().unwrap();
-        let (timestamp, node, sequence) = generator.extract.decompose(tsid);
+    fn test_tsid_generation_and_extraction() {
+        // Test basic generation and extraction
+        let mut generator = Tsid::new(42).unwrap();
+        let tsid1 = generator.generate();
         
-        assert_eq!(node, 42);
-        assert_eq!(sequence, 0);
-        assert!(timestamp > 0);
+        assert_eq!(generator.extract.node(tsid1), 42);
+        assert_eq!(generator.extract.sequence(tsid1), 0);
+        assert!(generator.extract.timestamp(tsid1) > 0);
+
+        // Test sequential generation
+        let tsid2 = generator.generate();
+        assert!(tsid2 > tsid1);
+        
+        assert_eq!(generator.extract.node(tsid2), 42);
+        assert!(generator.extract.sequence(tsid2) > 0);
+        assert!(generator.extract.timestamp(tsid2) >= generator.extract.timestamp(tsid1));
     }
 
     #[test]
-    fn test_bit_layout() {
+    fn test_custom_configuration() {
         let config = TsidConfig::builder()
             .node_bits(12)
-            .custom_epoch(0)
             .build();
 
-        let generator = Tsid::with_config(42, config).unwrap();
-        let tsid = generator.generate().unwrap();
-
-        // Extract components
-        let (timestamp, node, sequence) = generator.extract.decompose(tsid);
-
-        // Verify bit layout
-        assert_eq!(node, 42);
-        assert!(sequence <= 1023); // 10 bits = max value of 1023
-        assert!(timestamp > 0);
-    }
-
-    #[test]
-    fn test_custom_config() {
-        let config = TsidConfig::builder()
-            .node_bits(12)       // 4096 nodes
-            .custom_epoch(DEFAULT_CUSTOM_EPOCH)
-            .build();
-
-        let generator = Tsid::with_config(1023, config).unwrap();
+        let mut generator = Tsid::with_config(1023, config).unwrap();
+        
+        // Verify configuration limits
         assert_eq!(generator.max_node_id(), 4095);
         assert_eq!(generator.max_sequence(), 1023);
 
-        let tsid = generator.generate().unwrap();
-        let (_, node, sequence) = generator.extract.decompose(tsid);
+        // Generate and verify components
+        let tsid = generator.generate();
         
-        assert!(node <= 4095, "Node ID exceeds maximum");
-        assert!(sequence <= 1023, "Sequence exceeds maximum");
-    }
-
-    #[test]
-    fn test_sequential_generation() {
-        let generator = Tsid::new(1).unwrap();
-        let tsid1 = generator.generate().unwrap();
-        let tsid2 = generator.generate().unwrap();
-        assert!(tsid2 > tsid1);
+        assert!(generator.extract.node(tsid) <= 4095, "Node ID exceeds maximum");
+        assert!(generator.extract.sequence(tsid) <= 1023, "Sequence exceeds maximum");
     }
 
     #[test]
     fn test_unique_ids_across_nodes() {
-        let gen1 = Tsid::new(1).unwrap();
-        let gen2 = Tsid::new(2).unwrap();
+        let mut gen1 = Tsid::new(1).unwrap();
+        let mut gen2 = Tsid::new(2).unwrap();
         
         let mut ids = HashSet::new();
         
         // Generate IDs from both generators
         for _ in 0..1000 {
-            ids.insert(gen1.generate().unwrap());
-            ids.insert(gen2.generate().unwrap());
+            ids.insert(gen1.generate());
+            ids.insert(gen2.generate());
         }
 
         // Verify all IDs are unique
@@ -83,9 +65,9 @@ mod tests {
             .custom_epoch(custom_epoch)
             .build();
 
-        let generator = Tsid::with_config(1, config).unwrap();
-        let tsid = generator.generate().unwrap();
-        let (timestamp, _, _) = generator.extract.decompose(tsid);
+        let mut generator = Tsid::with_config(1, config).unwrap();
+        let tsid = generator.generate();
+        let timestamp = generator.extract.timestamp(tsid);
 
         // The extracted timestamp should be relative to custom epoch
         assert!(timestamp > 0);

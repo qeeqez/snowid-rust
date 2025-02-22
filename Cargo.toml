@@ -21,7 +21,20 @@ debug = true
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
+rand = "0.8.5"
 
 [[bench]]
 name = "tsid_benchmarks"
 harness = false
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+
+[[example]]
+name = "custom_config"
+path = "examples/custom_config.rs"
+
+[[example]]
+name = "distributed"
+path = "examples/distributed.rs"

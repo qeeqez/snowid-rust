@@ -1,6 +1,7 @@
 use crate::config::TsidConfig;
 
 /// TSID component extractor
+#[derive(Debug)]
 pub struct TsidExtractor {
     config: TsidConfig,
 }
@@ -11,60 +12,61 @@ impl TsidExtractor {
         Self { config }
     }
 
-    /// Decompose TSID into its components: timestamp, node ID, and sequence
-    pub fn decompose(&self, tsid: u64) -> (u64, u16, u16) {
-        (
-            self.extract_timestamp(tsid),
-            self.extract_node(tsid),
-            self.extract_sequence(tsid)
-        )
-    }
-
-    /// Extract timestamp from a TSID
+    /// Extract timestamp component from a TSID
     #[inline]
-    pub fn extract_timestamp(&self, tsid: u64) -> u64 {
+    pub fn timestamp(&self, tsid: u64) -> u64 {
         (tsid >> self.config.timestamp_shift()) & self.config.timestamp_mask()
     }
 
-    /// Extract node ID from a TSID
+    /// Extract node component from a TSID
     #[inline]
-    pub fn extract_node(&self, tsid: u64) -> u16 {
+    pub fn node(&self, tsid: u64) -> u16 {
         ((tsid >> self.config.node_shift()) & self.config.node_mask() as u64) as u16
     }
 
-    /// Extract sequence from a TSID
+    /// Extract sequence component from a TSID
     #[inline]
-    pub fn extract_sequence(&self, tsid: u64) -> u16 {
+    pub fn sequence(&self, tsid: u64) -> u16 {
         (tsid & self.config.sequence_mask() as u64) as u16
+    }
+
+    /// Decompose TSID into its components: timestamp, node ID, and sequence
+    pub fn decompose(&self, tsid: u64) -> (u64, u16, u16) {
+        (
+            self.timestamp(tsid),
+            self.node(tsid),
+            self.sequence(tsid)
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::TsidConfig;
+    use crate::Tsid;
 
     #[test]
-    fn test_extract_components() {
+    fn test_decompose() {
         let config = TsidConfig::default();
-        let extractor = TsidExtractor::new(config);
+        let tsid_gen = Tsid::with_config(42, config).unwrap();
 
         // Create a known TSID value with specific components
         let timestamp: u64 = 0x1234567;
         let node: u16 = 42;
         let sequence: u16 = 123;
 
+        // Create TSID using the generator's internal method
         let tsid = ((timestamp & config.timestamp_mask()) << config.timestamp_shift())
             | ((node as u64 & config.node_mask() as u64) << config.node_shift())
             | (sequence as u64 & config.sequence_mask() as u64);
 
         // Test individual component extraction
-        assert_eq!(extractor.extract_timestamp(tsid), timestamp);
-        assert_eq!(extractor.extract_node(tsid), node);
-        assert_eq!(extractor.extract_sequence(tsid), sequence);
+        assert_eq!(tsid_gen.extract.timestamp(tsid), timestamp);
+        assert_eq!(tsid_gen.extract.node(tsid), node);
+        assert_eq!(tsid_gen.extract.sequence(tsid), sequence);
 
         // Test combined extraction
-        let (ext_timestamp, ext_node, ext_sequence) = extractor.decompose(tsid);
+        let (ext_timestamp, ext_node, ext_sequence) = tsid_gen.extract.decompose(tsid);
         assert_eq!(ext_timestamp, timestamp);
         assert_eq!(ext_node, node);
         assert_eq!(ext_sequence, sequence);
@@ -73,20 +75,20 @@ mod tests {
     #[test]
     fn test_component_boundaries() {
         let config = TsidConfig::default();
-        let extractor = TsidExtractor::new(config);
+        let tsid_gen = Tsid::with_config(1, config).unwrap();
 
         // Test maximum values
-        let max_timestamp = config.timestamp_mask();
+        let max_timestamp = (1u64 << 42) - 1;
         let max_node_id = config.max_node_id();
         let max_sequence = config.max_sequence();
 
-        let tsid = (max_timestamp << config.timestamp_shift())
-            | ((max_node_id as u64) << config.node_shift())
-            | max_sequence as u64;
+        // Create TSID using maximum values
+        let tsid = ((max_timestamp & config.timestamp_mask()) << config.timestamp_shift())
+            | ((max_node_id as u64 & config.node_mask() as u64) << config.node_shift())
+            | (max_sequence as u64 & config.sequence_mask() as u64);
 
-        let (timestamp, node, sequence) = extractor.decompose(tsid);
-        assert_eq!(timestamp, max_timestamp);
-        assert_eq!(node, max_node_id);
-        assert_eq!(sequence, max_sequence);
+        assert_eq!(tsid_gen.extract.timestamp(tsid), max_timestamp);
+        assert_eq!(tsid_gen.extract.node(tsid), max_node_id);
+        assert_eq!(tsid_gen.extract.sequence(tsid), max_sequence);
     }
 }

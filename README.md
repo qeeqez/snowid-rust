@@ -1,7 +1,7 @@
 # ❄️ SnowID Rust
 
-[![Crates.io](https://img.shields.io/crates/v/snowid-rust.svg)](https://crates.io/crates/snowid-rust)
-[![Documentation](https://docs.rs/snowid-rust/badge.svg)](https://docs.rs/snowid-rust)
+[![Crates.io](https://img.shields.io/crates/v/snowid.svg)](https://crates.io/crates/snowid)
+[![Documentation](https://docs.rs/snowid/badge.svg)](https://docs.rs/snowid)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > A Rust implementation of a Snowflake-like ID generator with 42-bit timestamp.
@@ -32,7 +32,7 @@
 
 ```toml
 [dependencies]
-snowid-rust = "0.1.0"
+snowid = "0.1.0"
 ```
 
 ```rust

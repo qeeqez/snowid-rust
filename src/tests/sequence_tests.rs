@@ -23,8 +23,8 @@ fn test_sequence_rollover() {
             // If we've seen a sequence reset within the same millisecond
             if seq < max_sequence_seen {
                 assert!(max_sequence_seen > 0, "Should have seen some sequence increment");
-                assert!(max_sequence_seen <= generator.max_sequence(), 
-                    "Sequence {} exceeded maximum {}", max_sequence_seen, generator.max_sequence());
+                assert!(max_sequence_seen <= generator.config.max_sequence(),
+                    "Sequence {} exceeded maximum {}", max_sequence_seen, generator.config.max_sequence());
                 return; // Test passed - we found a sequence rollover
             }
         } else if i > 0 {
@@ -62,7 +62,7 @@ fn test_sequence_overflow_handling() {
                 );
             } else {
                 // On timestamp change, check if it was due to sequence overflow
-                if prev_seq >= generator.max_sequence() {
+                if prev_seq >= generator.config.max_sequence() {
                     assert!(ts > prev_ts, "Timestamp should advance on sequence overflow");
                     assert_eq!(sequence, 0, "Sequence should reset to 0 on overflow");
                     overflow_handled = true;

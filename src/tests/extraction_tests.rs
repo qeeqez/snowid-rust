@@ -31,8 +31,8 @@ mod tests {
         let mut generator = SnowID::with_config(1023, config).unwrap();
         
         // Verify configuration limits
-        assert_eq!(generator.max_node_id(), 4095);
-        assert_eq!(generator.max_sequence(), 1023);
+        assert_eq!(generator.config.max_node_id(), 4095);
+        assert_eq!(generator.config.max_sequence(), 1023);
 
         // Generate and verify components
         let snowid = generator.generate();

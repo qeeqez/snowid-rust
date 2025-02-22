@@ -17,7 +17,7 @@ pub use extractor::SnowIDExtractor;
 #[derive(Debug)]
 pub struct SnowID {
     node_id: u16,
-    config: SnowIDConfig,
+    pub config: SnowIDConfig,
     pub extract: SnowIDExtractor,
     last_timestamp: u64,
     sequence: u16,
@@ -51,7 +51,7 @@ impl SnowID {
     ///
     /// * `Result<SnowID, Error>` - New SnowID generator or error if node_id is invalid
     pub fn with_config(node_id: u16, config: SnowIDConfig) -> Result<Self, SnowIDError> {
-        if node_id >= (1 << config.node_bits()) {
+        if node_id > config.max_node_id() {
             return Err(SnowIDError::InvalidNodeId {
                 node_id,
                 max: (1 << config.node_bits()) - 1,
@@ -93,31 +93,7 @@ impl SnowID {
             }
         }
 
-        self.create_snowid(self.last_timestamp as u64, self.sequence)
-    }
-
-    /// Get the number of bits used for node ID in the current configuration
-    #[inline]
-    pub fn node_bits(&self) -> u8 {
-        self.config.node_bits()
-    }
-
-    /// Get the number of bits used for sequence in the current configuration
-    #[inline]
-    pub fn sequence_bits(&self) -> u8 {
-        self.config.sequence_bits()
-    }
-
-    /// Get the maximum node ID supported by the current configuration
-    #[inline]
-    pub fn max_node_id(&self) -> u16 {
-        (1 << self.config.node_bits()) - 1
-    }
-
-    /// Get the maximum sequence number supported by the current configuration
-    #[inline]
-    pub fn max_sequence(&self) -> u16 {
-        self.config.max_sequence()
+        self.create_snowid(self.last_timestamp, self.sequence)
     }
 
     #[inline]

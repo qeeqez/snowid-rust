@@ -54,6 +54,24 @@ impl TsidConfigBuilder {
         self
     }
 
+    /// Set the number of bits for sequence (2-21)
+    /// Node bits will be automatically set to (22 - sequence_bits)
+    /// 
+    /// # Arguments
+    /// * `bits` - Number of bits for sequence (2-21)
+    /// 
+    /// # Returns
+    /// * `Self` - Builder instance for chaining
+    /// 
+    /// # Panics
+    /// Panics if bits is not between 2 and 21
+    pub fn sequence_bits(mut self, bits: u8) -> Self {
+        assert!(bits >= 2 && bits <= 21, "Sequence bits must be between 2 and 21");
+        self.config.sequence_bits = bits;
+        self.config.node_bits = TOTAL_NODE_AND_SEQUENCE_BITS - bits;
+        self
+    }
+
     /// Set a custom epoch timestamp in milliseconds
     /// 
     /// # Arguments

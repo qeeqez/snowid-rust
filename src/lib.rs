@@ -27,6 +27,16 @@ pub struct TsidGenerator {
     last_timestamp: AtomicU64,
 }
 
+impl Clone for TsidGenerator {
+    fn clone(&self) -> Self {
+        Self {
+            node_id: self.node_id,
+            sequence: AtomicU16::new(self.sequence.load(Ordering::Relaxed)),
+            last_timestamp: AtomicU64::new(self.last_timestamp.load(Ordering::Relaxed)),
+        }
+    }
+}
+
 impl TsidGenerator {
     /// Create a new TSID generator with the given node ID
     ///
@@ -51,22 +61,38 @@ impl TsidGenerator {
             let timestamp = self.current_time();
             let last = self.last_timestamp.load(Ordering::Acquire);
             
-            let sequence = if timestamp == last {
+            if timestamp > last {
+                // New millisecond, try to update last_timestamp
+                match self.last_timestamp.compare_exchange(
+                    last,
+                    timestamp,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
+                    Ok(_) => {
+                        // Successfully updated timestamp, reset sequence
+                        self.sequence.store(0, Ordering::Release);
+                        return self.create_tsid(timestamp, 0);
+                    }
+                    Err(_) => continue, // Another thread updated timestamp, retry
+                }
+            } else if timestamp < last {
+                // Clock went backwards, use last timestamp and try to get next sequence
                 let seq = self.sequence.fetch_add(1, Ordering::AcqRel);
                 if seq < TSID_MAX_SEQUENCE {
-                    seq + 1
-                } else {
-                    // Sequence exhausted, retry with new timestamp
-                    self.sequence.store(0, Ordering::Release);
-                    continue;
+                    return self.create_tsid(last, seq + 1);
                 }
+                // Sequence exhausted, busy-wait for next millisecond
+                continue;
             } else {
-                self.sequence.store(0, Ordering::Release);
-                self.last_timestamp.store(timestamp, Ordering::Release);
-                0
-            };
-
-            return self.create_tsid(timestamp, sequence);
+                // Same millisecond, try to get next sequence
+                let seq = self.sequence.fetch_add(1, Ordering::AcqRel);
+                if seq < TSID_MAX_SEQUENCE {
+                    return self.create_tsid(timestamp, seq + 1);
+                }
+                // Sequence exhausted, busy-wait for next millisecond
+                continue;
+            }
         }
     }
 
@@ -101,6 +127,7 @@ pub fn extract_from_tsid(tsid: u64) -> (u64, u16, u16) {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+    use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
 
@@ -329,5 +356,225 @@ mod tests {
         };
         
         assert!(diff < 1000, "Timestamp difference should be less than 1 second");
+    }
+
+    #[test]
+    fn test_sequence_overflow_handling() {
+        let generator = TsidGenerator::new(1);
+        let first_timestamp = Arc::new(Mutex::new(None));
+        let first_timestamp_clone = first_timestamp.clone();
+        
+        // Spawn multiple threads to generate IDs rapidly
+        let handles: Vec<_> = (0..4).map(|_| {
+            let gen = generator.clone();
+            let ts = first_timestamp_clone.clone();
+            thread::spawn(move || {
+                let mut ids = Vec::new();
+                for _ in 0..300 {
+                    let id = gen.generate();
+                    let (timestamp, _, sequence) = extract_from_tsid(id);
+                    
+                    // Store the first timestamp we see
+                    let mut ts = ts.lock().unwrap();
+                    if ts.is_none() {
+                        *ts = Some(timestamp);
+                    }
+                    
+                    // Verify sequence doesn't exceed max
+                    assert!(sequence <= TSID_MAX_SEQUENCE, 
+                        "Sequence {} exceeded maximum {}", sequence, TSID_MAX_SEQUENCE);
+                    
+                    ids.push((timestamp, sequence));
+                }
+                ids
+            })
+        }).collect();
+
+        // Collect and analyze results
+        let mut all_ids = Vec::new();
+        for handle in handles {
+            all_ids.extend(handle.join().unwrap());
+        }
+
+        // Sort by timestamp and sequence
+        all_ids.sort_by_key(|&(ts, seq)| (ts, seq));
+
+        // Check sequence counts per timestamp
+        let mut current_ts = all_ids[0].0;
+        let mut seq_count = 0;
+        
+        for &(ts, _) in &all_ids {
+            if ts == current_ts {
+                seq_count += 1;
+                assert!(seq_count <= TSID_MAX_SEQUENCE as usize + 1, 
+                    "Too many sequences ({}) for timestamp {}", seq_count, ts);
+            } else {
+                current_ts = ts;
+                seq_count = 1;
+            }
+        }
+    }
+
+    #[test]
+    fn test_timestamp_backtrack_protection() {
+        let generator = TsidGenerator::new(1);
+        let mut last_tsid = generator.generate();
+        
+        // Generate IDs and verify they're always increasing
+        for _ in 0..1000 {
+            let current_tsid = generator.generate();
+            assert!(current_tsid > last_tsid, 
+                "TSID decreased from {} to {}", last_tsid, current_tsid);
+            last_tsid = current_tsid;
+        }
+    }
+
+    #[test]
+    fn test_max_sequence_per_ms() {
+        let generator = TsidGenerator::new(1);
+        let mut sequences_seen = HashSet::new();
+        let mut last_timestamp = 0;
+        
+        for _ in 0..2000 {
+            let tsid = generator.generate();
+            let (timestamp, _, sequence) = extract_from_tsid(tsid);
+            
+            if timestamp != last_timestamp {
+                // New millisecond, reset tracking
+                sequences_seen.clear();
+                last_timestamp = timestamp;
+            }
+            
+            // Ensure we haven't seen this sequence for this timestamp
+            let key = (timestamp, sequence);
+            assert!(!sequences_seen.contains(&key), 
+                "Duplicate sequence {} for timestamp {}", sequence, timestamp);
+            sequences_seen.insert(key);
+            
+            // Verify sequence is within bounds
+            assert!(sequence <= TSID_MAX_SEQUENCE);
+        }
+    }
+
+    #[test]
+    fn test_concurrent_sequence_uniqueness() {
+        let generator = Arc::new(TsidGenerator::new(1));
+        let seen_ids = Arc::new(Mutex::new(HashSet::new()));
+        let threads = 4;
+        let ids_per_thread = 500;
+
+        let handles: Vec<_> = (0..threads).map(|_| {
+            let gen = generator.clone();
+            let seen = seen_ids.clone();
+            thread::spawn(move || {
+                for _ in 0..ids_per_thread {
+                    let id = gen.generate();
+                    let mut seen = seen.lock().unwrap();
+                    assert!(!seen.contains(&id), "Duplicate ID generated: {}", id);
+                    seen.insert(id);
+                }
+            })
+        }).collect();
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // Verify total number of unique IDs
+        let total_ids = seen_ids.lock().unwrap().len();
+        assert_eq!(total_ids, threads * ids_per_thread);
+    }
+
+    #[test]
+    fn test_rapid_generation() {
+        let generator = TsidGenerator::new(1);
+        let mut last_id = 0;
+        
+        // Generate IDs as fast as possible
+        for _ in 0..10_000 {
+            let id = generator.generate();
+            assert!(id > last_id, "ID not monotonically increasing");
+            last_id = id;
+        }
+    }
+
+    #[test]
+    fn test_component_boundaries() {
+        let generator = TsidGenerator::new(TSID_MAX_NODE);
+        let _tsid = generator.generate();
+        
+        // Test maximum values for each component
+        let max_timestamp = (1u64 << TSID_TIMESTAMP_BITS) - 1;
+        let max_node = (1u16 << TSID_NODE_BITS) - 1;
+        let max_sequence = (1u16 << TSID_SEQUENCE_BITS) - 1;
+        
+        // Create a TSID with maximum values
+        let max_tsid = ((max_timestamp & TSID_TIMESTAMP_MASK) << TSID_TIMESTAMP_SHIFT) |
+                      ((max_node as u64 & TSID_NODE_MASK as u64) << TSID_NODE_SHIFT) |
+                      (max_sequence as u64 & TSID_SEQUENCE_MASK as u64);
+        
+        // Extract and verify components
+        let (ts, node, seq) = extract_from_tsid(max_tsid);
+        assert_eq!(ts, max_timestamp);
+        assert_eq!(node, max_node);
+        assert_eq!(seq, max_sequence);
+        
+        // Verify no bits are set outside their designated positions
+        let total_bits = TSID_TIMESTAMP_BITS as u32 + 
+                        TSID_NODE_BITS as u32 + 
+                        TSID_SEQUENCE_BITS as u32;
+        
+        // Create a mask for all valid bits
+        let valid_bits_mask = ((1u64 << TSID_SEQUENCE_BITS) - 1) |
+                            (((1u64 << TSID_NODE_BITS) - 1) << TSID_NODE_SHIFT) |
+                            (((1u64 << TSID_TIMESTAMP_BITS) - 1) << TSID_TIMESTAMP_SHIFT);
+        
+        // Check that there are no bits set outside our valid bits
+        assert_eq!(max_tsid & !valid_bits_mask, 0, 
+            "Found set bits outside of designated positions");
+        
+        // Verify total bits used is correct
+        assert_eq!(total_bits, 64, 
+            "Total bits {} should equal 64", total_bits);
+    }
+
+    #[test]
+    fn test_zero_node_id() {
+        let generator = TsidGenerator::new(0);
+        let tsid = generator.generate();
+        let (_, node, _) = extract_from_tsid(tsid);
+        assert_eq!(node, 0, "Node ID should be preserved as 0");
+    }
+
+    #[test]
+    fn test_sequence_restart() {
+        let generator = TsidGenerator::new(1);
+        let mut last_sequence = 0;
+        let mut sequence_restarts = 0;
+        let mut last_timestamp = 0;
+        
+        // Generate IDs and track sequence restarts
+        for _ in 0..1000 {
+            let tsid = generator.generate();
+            let (timestamp, _, sequence) = extract_from_tsid(tsid);
+            
+            if timestamp != last_timestamp {
+                // Verify sequence restarts from 0 on timestamp change
+                assert_eq!(sequence, 0, 
+                    "Sequence should restart from 0 on timestamp change");
+                sequence_restarts += 1;
+                last_timestamp = timestamp;
+            } else if sequence < last_sequence {
+                // If sequence decreased but timestamp didn't change,
+                // we've hit the sequence limit and wrapped around
+                sequence_restarts += 1;
+            }
+            
+            last_sequence = sequence;
+        }
+        
+        // Ensure we had at least some sequence restarts
+        assert!(sequence_restarts > 0, 
+            "No sequence restarts detected in 1000 generations");
     }
 }

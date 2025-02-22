@@ -1,13 +1,13 @@
-use tsid_rust::{Tsid, TsidConfig};
+use snowid::{SnowID, SnowIDConfig};
 
 fn main() {
     // Create a custom configuration for many nodes (12 bits = 4096 nodes)
-    let config = TsidConfig::builder()
+    let config = SnowIDConfig::builder()
         .node_bits(12)  // 12 bits for node ID = 4096 nodes
         .build();
 
     // Create generator with node ID 42
-    let mut generator = Tsid::with_config(42, config).unwrap();
+    let mut generator = SnowID::with_config(42, config).unwrap();
 
     println!("Generator configuration:");
     println!("  Node bits: {}", generator.node_bits());

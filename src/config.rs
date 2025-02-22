@@ -4,9 +4,9 @@ const TOTAL_NODE_AND_SEQUENCE_BITS: u8 = 22; // Fixed total for node + sequence
 const DEFAULT_NODE_BITS: u8 = 10;
 const DEFAULT_CUSTOM_EPOCH: u64 = 1704067200000; // January 1, 2024 UTC
 
-/// Configuration for TSID Generator
+/// Configuration for SnowID generator
 #[derive(Debug, Clone, Copy)]
-pub struct TsidConfig {
+pub struct SnowIDConfig {
     node_bits: u8,
     custom_epoch: u64,
     timestamp_shift: u8,
@@ -16,8 +16,8 @@ pub struct TsidConfig {
     sequence_mask: u16,
 }
 
-impl TsidConfig {
-    /// Create new TsidConfig with given node bits
+impl SnowIDConfig {
+    /// Create new SnowIDConfig with given node bits
     fn new(node_bits: u8, custom_epoch: u64) -> Self {
         let sequence_bits = TOTAL_NODE_AND_SEQUENCE_BITS - node_bits;
         Self {
@@ -32,8 +32,8 @@ impl TsidConfig {
     }
 
     /// Create a new configuration builder
-    pub fn builder() -> TsidConfigBuilder {
-        TsidConfigBuilder::new()
+    pub fn builder() -> SnowIDConfigBuilder {
+        SnowIDConfigBuilder::new()
     }
 
     /// Get sequence bits derived from node bits
@@ -60,7 +60,7 @@ impl TsidConfig {
         self.sequence_mask
     }
 
-    // Internal methods used by Tsid and TsidExtractor
+    // Internal methods used by SnowID and SnowIDExtractor
     #[inline]
     pub(crate) fn timestamp_shift(&self) -> u8 {
         self.timestamp_shift
@@ -92,21 +92,21 @@ impl TsidConfig {
     }
 }
 
-impl Default for TsidConfig {
+impl Default for SnowIDConfig {
     fn default() -> Self {
         Self::new(DEFAULT_NODE_BITS, DEFAULT_CUSTOM_EPOCH)
     }
 }
 
-/// Builder for TsidConfig
+/// Builder for SnowIDConfig
 #[derive(Debug)]
-pub struct TsidConfigBuilder {
+pub struct SnowIDConfigBuilder {
     node_bits: u8,
     custom_epoch: u64,
 }
 
-impl TsidConfigBuilder {
-    /// Create a new TsidConfigBuilder with default values
+impl SnowIDConfigBuilder {
+    /// Create a new SnowIDConfigBuilder with default values
     pub fn new() -> Self {
         Self {
             node_bits: DEFAULT_NODE_BITS,
@@ -148,12 +148,12 @@ impl TsidConfigBuilder {
         self
     }
 
-    /// Build the final TsidConfig
+    /// Build the final SnowIDConfig
     /// 
     /// # Returns
-    /// * `TsidConfig` - The configured TsidConfig instance
-    pub fn build(self) -> TsidConfig {
-        TsidConfig::new(self.node_bits, self.custom_epoch)
+    /// * `SnowIDConfig` - The configured SnowIDConfig instance
+    pub fn build(self) -> SnowIDConfig {
+        SnowIDConfig::new(self.node_bits, self.custom_epoch)
     }
 }
 
@@ -168,7 +168,7 @@ mod tests {
         fn test_valid_node_bits() {
             // Test all valid node bits from 6 to 16
             for bits in 6..=16 {
-                let config = TsidConfig::builder().node_bits(bits).build();
+                let config = SnowIDConfig::builder().node_bits(bits).build();
                 assert_eq!(config.node_bits(), bits);
                 assert_eq!(config.sequence_bits(), TOTAL_NODE_AND_SEQUENCE_BITS - bits);
                 assert_eq!(config.max_node_id(), ((1u32 << bits) - 1) as u16);
@@ -178,25 +178,25 @@ mod tests {
         #[test]
         #[should_panic(expected = "Node bits must be between 6 and 16")]
         fn test_too_few_node_bits() {
-            TsidConfig::builder().node_bits(5).build();
+            SnowIDConfig::builder().node_bits(5).build();
         }
 
         #[test]
         #[should_panic(expected = "Node bits must be between 6 and 16")]
         fn test_too_many_node_bits() {
-            TsidConfig::builder().node_bits(17).build();
+            SnowIDConfig::builder().node_bits(17).build();
         }
 
         #[test]
         #[should_panic(expected = "Node bits must be between 6 and 16")]
         fn test_max_u8_node_bits() {
-            TsidConfig::builder().node_bits(u8::MAX).build();
+            SnowIDConfig::builder().node_bits(u8::MAX).build();
         }
     }
 
     #[test]
     fn test_custom_config() {
-        let config = TsidConfig::builder()
+        let config = SnowIDConfig::builder()
             .node_bits(12)
             .custom_epoch(1640995200000) // 2022-01-01
             .build();
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn test_default_config() {
-        let config = TsidConfig::default();
+        let config = SnowIDConfig::default();
         assert_eq!(config.node_bits(), DEFAULT_NODE_BITS);
         assert_eq!(config.sequence_bits(), TOTAL_NODE_AND_SEQUENCE_BITS - DEFAULT_NODE_BITS);
         assert_eq!(config.custom_epoch(), DEFAULT_CUSTOM_EPOCH);
@@ -217,12 +217,12 @@ mod tests {
     #[test]
     #[should_panic(expected = "Node bits must be between 6 and 16")]
     fn test_invalid_node_bits() {
-        TsidConfig::builder().node_bits(21).build();
+        SnowIDConfig::builder().node_bits(21).build();
     }
 
     #[test]
     fn test_bit_config() {
-        let config = TsidConfig::default();
+        let config = SnowIDConfig::default();
         assert_eq!(config.node_shift(), 12);
         assert_eq!(config.timestamp_shift(), 22);
         assert_eq!(config.sequence_mask(), 0xFFF);

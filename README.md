@@ -1,10 +1,10 @@
-# 🆔 TSID Rust
+# 🆔 SnowID Rust
 
-[![Crates.io](https://img.shields.io/crates/v/tsid-rust.svg)](https://crates.io/crates/tsid-rust)
-[![Documentation](https://docs.rs/tsid-rust/badge.svg)](https://docs.rs/tsid-rust)
+[![Crates.io](https://img.shields.io/crates/v/snowid-rust.svg)](https://crates.io/crates/snowid-rust)
+[![Documentation](https://docs.rs/snowid-rust/badge.svg)](https://docs.rs/snowid-rust)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> 🚀 Lightning-fast, thread-safe, time-sorted unique ID generator for distributed systems
+> A Rust implementation of a Snowflake-like ID generator with 42-bit timestamp.
 
 Generate 64-bit unique identifiers that are:
 - ⚡️ Fast (~244ns per ID)
@@ -30,31 +30,29 @@ Default configuration:
 
 ```toml
 [dependencies]
-tsid-rust = "0.1.0"
+snowid-rust = "0.1.0"
 ```
 
 ```rust
-use tsid_rust::Tsid;
+use snowid::SnowID;
 
-// Create generator for node 1
-let mut gen = Tsid::new(1).unwrap();
-
-// Generate unique IDs
-let id = gen.generate();
-
-// Extract components
-let (ts, node, seq) = gen.extract.decompose(id);
+fn main() {
+    let mut gen = SnowID::new(1).unwrap();
+    let id = gen.generate();
+    println!("Generated ID: {}", id);
+}
 ```
 
 ## 🔧 Configuration
 
 ```rust
-let config = TsidConfig::builder()
-    .node_bits(12)          // 4096 nodes (range: 6-16 bits)
-    .custom_epoch(1704067200000) // Custom epoch
+let config = SnowIDConfig::builder()
+    .custom_epoch(1577836800000) // 2020-01-01 00:00:00 UTC
+    .node_bits(10)
+    .sequence_bits(12)
     .build();
 
-let gen = Tsid::with_config(1, config).unwrap();
+let gen = SnowID::with_config(1, config).unwrap();
 ```
 
 ## 📊 Performance & Comparisons

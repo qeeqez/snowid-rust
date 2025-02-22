@@ -5,15 +5,15 @@ use std::time::Instant;
 
 #[test]
 fn test_sequence_rollover() {
-    let mut generator = Tsid::new(1).unwrap();
+    let mut generator = SnowID::new(1).unwrap();
     let initial_timestamp = generator.generate();
     let initial_ts = generator.extract.timestamp(initial_timestamp);
     let mut max_sequence_seen = 0;
     
     // Generate IDs until we see the sequence reset
     for i in 0..10000 {
-        let tsid = generator.generate();
-        let (ts, _, seq) = generator.extract.decompose(tsid);
+        let SnowID = generator.generate();
+        let (ts, _, seq) = generator.extract.decompose(SnowID);
         
         // Track highest sequence number seen
         max_sequence_seen = max_sequence_seen.max(seq);
@@ -44,15 +44,15 @@ fn test_sequence_rollover() {
 
 #[test]
 fn test_sequence_overflow_handling() {
-    let mut generator = Tsid::new(1).unwrap();
+    let mut generator = SnowID::new(1).unwrap();
     let mut last_ts = None;
     let mut last_sequence = None;
     let mut overflow_handled = false;
     
     // Generate IDs rapidly to force sequence overflow
     for _ in 0..10000 {
-        let tsid = generator.generate();
-        let (ts, _, sequence) = generator.extract.decompose(tsid);
+        let SnowID = generator.generate();
+        let (ts, _, sequence) = generator.extract.decompose(SnowID);
         
         if let (Some(prev_ts), Some(prev_seq)) = (last_ts, last_sequence) {
             if ts == prev_ts {
@@ -85,14 +85,14 @@ fn test_sequence_overflow_handling() {
 
 #[test]
 fn test_sequence_restart() {
-    let mut generator = Tsid::new(1).unwrap();
+    let mut generator = SnowID::new(1).unwrap();
     let mut last_timestamp = None;
     let mut last_sequence = None;
 
     // Generate IDs rapidly to force sequence increment
     for _ in 0..100 {
-        let tsid = generator.generate();
-        let (timestamp, _, sequence) = generator.extract.decompose(tsid);
+        let SnowID = generator.generate();
+        let (timestamp, _, sequence) = generator.extract.decompose(SnowID);
         
         if let (Some(last_seq), Some(last_ts)) = (last_sequence, last_timestamp) {
             if timestamp == last_ts {
@@ -115,7 +115,7 @@ fn test_sequence_restart() {
 
 #[test]
 fn test_sequence_monotonicity() {
-    let mut generator = Tsid::new(1).unwrap();
+    let mut generator = SnowID::new(1).unwrap();
     let mut last_id = None;
     
     // Generate IDs rapidly to test monotonicity
@@ -133,7 +133,7 @@ fn test_sequence_monotonicity() {
 #[test]
 fn test_10k_unique_ids() {
     const NUM_IDS: usize = 10_000;
-    let mut generator = Tsid::new(1).unwrap();
+    let mut generator = SnowID::new(1).unwrap();
     let mut ids = HashSet::with_capacity(NUM_IDS);
     let mut last_id = None;
     let mut duplicates = Vec::new();

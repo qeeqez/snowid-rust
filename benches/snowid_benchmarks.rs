@@ -1,7 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use tsid_rust::{Tsid, TsidConfig};
+use snowid::{SnowID, SnowIDConfig};
 
 pub fn node_bits_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("Node Bits Comparison");
@@ -9,7 +7,7 @@ pub fn node_bits_comparison(c: &mut Criterion) {
     // Test different node bit lengths
     // This affects the balance between max nodes (2^node_bits) and sequences per ms (2^sequence_bits)
     for &node_bits in &[6, 8, 10, 12, 14, 16] {
-        let config = TsidConfig::builder()
+        let config = SnowIDConfig::builder()
             .node_bits(node_bits)
             .build();
         
@@ -21,7 +19,7 @@ pub fn node_bits_comparison(c: &mut Criterion) {
         group.bench_function(
             format!("bits_{}_nodes_{}_seq_{}", node_bits, max_nodes, max_sequence), 
             |b| {
-                let mut generator = Tsid::with_config(1, config).unwrap();
+                let mut generator = SnowID::with_config(1, config).unwrap();
                 b.iter(|| {
                     black_box(generator.generate());
                 });
@@ -34,12 +32,12 @@ pub fn node_bits_comparison(c: &mut Criterion) {
 
 pub fn component_extraction_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Component Extraction");
-    let mut generator = Tsid::new(1).unwrap();
-    let tsid = generator.generate();
+    let mut generator = SnowID::new(1).unwrap();
+    let snowid = generator.generate();
 
     group.bench_function("extract_components", |b| {
         b.iter(|| {
-            black_box(generator.extract.decompose(black_box(tsid)));
+            black_box(generator.extract.decompose(black_box(snowid)));
         });
     });
 
@@ -52,12 +50,12 @@ pub fn concurrent_benchmarks(c: &mut Criterion) {
     for &thread_count in &[2, 4, 8] {
         group.bench_function(format!("threads/{}", thread_count), |b| {
             b.iter(|| {
-                let generator = Arc::new(Mutex::new(Tsid::new(1).unwrap()));
+                let generator = std::sync::Arc::new(std::sync::Mutex::new(SnowID::new(1).unwrap()));
                 let mut handles = Vec::with_capacity(thread_count);
 
                 for _ in 0..thread_count {
-                    let gen = Arc::clone(&generator);
-                    handles.push(thread::spawn(move || {
+                    let gen = std::sync::Arc::clone(&generator);
+                    handles.push(std::thread::spawn(move || {
                         black_box(gen.lock().unwrap().generate());
                     }));
                 }

@@ -1,32 +1,31 @@
 use std::fmt;
+use thiserror::Error;
 
-/// Represents errors that can occur during TSID operations
-#[derive(Debug, Clone, PartialEq)]
-pub enum TsidError {
+/// Represents errors that can occur during SnowID operations
+#[derive(Debug, Clone, PartialEq, Error)]
+pub enum SnowIDError {
     /// Error when node ID exceeds the maximum allowed value
-    InvalidNodeId {
-        node_id: u16,
-        max_allowed: u16,
-    },
+    #[error("Node ID {node_id} is invalid. Maximum allowed value is {max}")]
+    InvalidNodeId { node_id: u16, max: u16 },
     /// Error when clock moves backwards (system time issue)
-    ClockBackwards,
-    /// Error when sequence number overflows
-    SequenceOverflow,
+    #[error("Clock moved backwards. Refusing to generate id for {delta} milliseconds")]
+    ClockMovedBackwards { delta: i64 },
 }
 
-impl fmt::Display for TsidError {
+impl fmt::Display for SnowIDError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TsidError::InvalidNodeId { node_id, max_allowed } => {
-                write!(f, "Node ID {} exceeds maximum allowed value {}", node_id, max_allowed)
+            SnowIDError::InvalidNodeId { node_id, max } => {
+                write!(f, "Node ID {} is invalid. Maximum allowed value is {}", node_id, max)
             }
-            TsidError::ClockBackwards => write!(f, "System clock moved backwards"),
-            TsidError::SequenceOverflow => write!(f, "Sequence number overflow"),
+            SnowIDError::ClockMovedBackwards { delta } => {
+                write!(f, "Clock moved backwards. Refusing to generate id for {} milliseconds", delta)
+            }
         }
     }
 }
 
-impl std::error::Error for TsidError {}
+impl std::error::Error for SnowIDError {}
 
 #[cfg(test)]
 mod tests {
@@ -34,36 +33,36 @@ mod tests {
 
     #[test]
     fn test_error_display() {
-        let invalid_node = TsidError::InvalidNodeId {
+        let invalid_node = SnowIDError::InvalidNodeId {
             node_id: 1024,
-            max_allowed: 1023,
+            max: 1023,
         };
         assert_eq!(
             invalid_node.to_string(),
-            "Node ID 1024 exceeds maximum allowed value 1023"
+            "Node ID 1024 is invalid. Maximum allowed value is 1023"
         );
 
-        let clock_backwards = TsidError::ClockBackwards;
-        assert_eq!(clock_backwards.to_string(), "System clock moved backwards");
-
-        let sequence_overflow = TsidError::SequenceOverflow;
-        assert_eq!(sequence_overflow.to_string(), "Sequence number overflow");
+        let clock_backwards = SnowIDError::ClockMovedBackwards { delta: 100 };
+        assert_eq!(
+            clock_backwards.to_string(),
+            "Clock moved backwards. Refusing to generate id for 100 milliseconds"
+        );
     }
 
     #[test]
     fn test_error_debug() {
-        let invalid_node = TsidError::InvalidNodeId {
+        let invalid_node = SnowIDError::InvalidNodeId {
             node_id: 1024,
-            max_allowed: 1023,
+            max: 1023,
         };
         assert!(format!("{:?}", invalid_node).contains("InvalidNodeId"));
     }
 
     #[test]
     fn test_error_clone() {
-        let original = TsidError::InvalidNodeId {
+        let original = SnowIDError::InvalidNodeId {
             node_id: 1024,
-            max_allowed: 1023,
+            max: 1023,
         };
         let cloned = original.clone();
         assert_eq!(original, cloned);

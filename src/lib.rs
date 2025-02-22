@@ -6,83 +6,91 @@ mod config;
 mod error;
 mod extractor;
 
-pub use config::TsidConfig;
-pub use error::TsidError;
-pub use extractor::TsidExtractor;
+#[cfg(test)]
+mod tests;
 
-/// Time-Sorted ID Generator
-pub struct Tsid {
+pub use config::SnowIDConfig;
+pub use error::SnowIDError;
+pub use extractor::SnowIDExtractor;
+
+/// Main ID generator
+#[derive(Debug)]
+pub struct SnowID {
     node_id: u16,
-    config: TsidConfig,
-    pub extract: TsidExtractor,
-    last_timestamp: u64,
-    last_sequence: u16,
+    config: SnowIDConfig,
+    pub extract: SnowIDExtractor,
+    last_timestamp: i64,
+    sequence: u16,
 }
 
-impl Tsid {
-    /// Create a new TSID generator with default configuration
+impl SnowID {
+    /// Create a new SnowID generator with default configuration
     ///
     /// # Arguments
-    /// * `node_id` - Node ID for this generator
+    ///
+    /// * `node_id` - Node ID to use in generated IDs
     ///
     /// # Returns
-    /// * `Result<Tsid, Error>` - New TSID generator or error if node_id is invalid
-    pub fn new(node_id: u16) -> Result<Self, TsidError> {
-        Self::with_config(node_id, TsidConfig::default())
+    ///
+    /// * `Result<SnowID, Error>` - New SnowID generator or error if node_id is invalid
+    pub fn new(node_id: u16) -> Result<Self, SnowIDError> {
+        Self::with_config(node_id, SnowIDConfig::default())
     }
 
-    /// Create a new TSID generator with custom configuration
+    /// Create a new SnowID generator with custom configuration
     ///
     /// # Arguments
-    /// * `node_id` - Node ID for this generator
-    /// * `config` - Custom configuration for the generator
+    ///
+    /// * `node_id` - Node ID to use in generated IDs
+    /// * `config` - Custom configuration
     ///
     /// # Returns
-    /// * `Result<Tsid, Error>` - New TSID generator or error if node_id is invalid
-    pub fn with_config(node_id: u16, config: TsidConfig) -> Result<Self, TsidError> {
-        if node_id > config.max_node_id() {
-            return Err(TsidError::InvalidNodeId {
+    ///
+    /// * `Result<SnowID, Error>` - New SnowID generator or error if node_id is invalid
+    pub fn with_config(node_id: u16, config: SnowIDConfig) -> Result<Self, SnowIDError> {
+        if node_id >= (1 << config.node_bits()) {
+            return Err(SnowIDError::InvalidNodeId {
                 node_id,
-                max_allowed: config.max_node_id(),
+                max: (1 << config.node_bits()) - 1,
             });
         }
 
         Ok(Self {
             node_id,
-            extract: TsidExtractor::new(config.clone()),
+            extract: SnowIDExtractor::new(config.node_bits(), config.sequence_bits()),
             config,
             last_timestamp: 0,
-            last_sequence: config.max_sequence(),
+            sequence: 0,
         })
     }
 
-    /// Generate a new TSID
+    /// Generate a new SnowID
     ///
     /// # Returns
-    /// * `u64` - New TSID value
+    /// * `u64` - New SnowID value
     pub fn generate(&mut self) -> u64 {
         let timestamp = self.get_time_since_epoch();
 
-        if timestamp > self.last_timestamp {
-            self.last_timestamp = timestamp;
-            self.last_sequence = 0;
+        if timestamp > self.last_timestamp as u64 {
+            self.last_timestamp = timestamp as i64;
+            self.sequence = 0;
         } else {
             // For same timestamp or backwards clock, increment sequence
-            self.last_sequence = self.last_sequence.wrapping_add(1);
-            if self.last_sequence > self.config.max_sequence() {
+            self.sequence = self.sequence.wrapping_add(1);
+            if self.sequence > self.config.max_sequence() {
                 // Sequence exhausted, wait for next millisecond
                 // If clock moved backwards, wait from last timestamp
-                let wait_from = if timestamp == self.last_timestamp {
+                let wait_from = if timestamp == self.last_timestamp as u64 {
                     timestamp
                 } else {
-                    self.last_timestamp
+                    self.last_timestamp as u64
                 };
-                self.last_timestamp = self.wait_next_millis(wait_from);
-                self.last_sequence = 0;
+                self.last_timestamp = self.wait_next_millis(wait_from) as i64;
+                self.sequence = 0;
             }
         }
 
-        self.create_tsid(self.last_timestamp, self.last_sequence)
+        self.create_snowid(self.last_timestamp as u64, self.sequence)
     }
 
     /// Get the number of bits used for node ID in the current configuration
@@ -100,7 +108,7 @@ impl Tsid {
     /// Get the maximum node ID supported by the current configuration
     #[inline]
     pub fn max_node_id(&self) -> u16 {
-        self.config.max_node_id()
+        (1 << self.config.node_bits()) - 1
     }
 
     /// Get the maximum sequence number supported by the current configuration
@@ -128,17 +136,14 @@ impl Tsid {
     }
 
     #[inline]
-    fn create_tsid(&self, timestamp: u64, sequence: u16) -> u64 {
-        self.create_tsid_with_node(timestamp, self.node_id, sequence)
+    fn create_snowid(&self, timestamp: u64, sequence: u16) -> u64 {
+        self.create_snowid_with_node(timestamp, self.node_id, sequence)
     }
 
     #[inline]
-    fn create_tsid_with_node(&self, timestamp: u64, node_id: u16, sequence: u16) -> u64 {
+    fn create_snowid_with_node(&self, timestamp: u64, node_id: u16, sequence: u16) -> u64 {
         ((timestamp & self.config.timestamp_mask()) << self.config.timestamp_shift())
             | ((node_id as u64 & self.config.node_mask() as u64) << self.config.node_shift())
             | (sequence as u64 & self.config.sequence_mask() as u64)
     }
 }
-
-#[cfg(test)]
-mod tests;

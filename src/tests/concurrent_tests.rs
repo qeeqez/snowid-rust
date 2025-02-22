@@ -8,7 +8,7 @@ mod tests {
 
     #[test]
     fn test_concurrent_generation() {
-        let generator = Arc::new(Mutex::new(Tsid::new(1).unwrap()));
+        let generator = Arc::new(Mutex::new(SnowID::new(1).unwrap()));
         let mut handles = vec![];
         let num_threads = 4;
         let ids_per_thread = 250;
@@ -51,7 +51,7 @@ mod tests {
 
     #[test]
     fn test_rapid_generation() {
-        let mut generator = Tsid::new(1).unwrap();
+        let mut generator = SnowID::new(1).unwrap();
         let mut ids = HashSet::new();
         let iterations = 1000;
 
@@ -71,12 +71,12 @@ mod tests {
 
     #[test]
     fn test_timestamp_monotonicity() {
-        let mut generator = Tsid::new(1).unwrap();
+        let mut generator = SnowID::new(1).unwrap();
         let mut last_timestamp = 0;
 
         for _ in 0..100 {
-            let tsid = generator.generate();
-            let (timestamp, _, _) = generator.extract.decompose(tsid);
+            let SnowID = generator.generate();
+            let (timestamp, _, _) = generator.extract.decompose(SnowID);
             assert!(timestamp >= last_timestamp);
             last_timestamp = timestamp;
             

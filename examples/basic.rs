@@ -1,8 +1,8 @@
-use tsid_rust::Tsid;
+use snowid::SnowID;
 
 fn main() {
     // Create a generator with node ID 1
-    let mut generator = Tsid::new(1).unwrap();
+    let mut generator = SnowID::new(1).unwrap();
 
     // Generate some IDs
     let id1 = generator.generate();

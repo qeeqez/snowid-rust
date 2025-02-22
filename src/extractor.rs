@@ -1,41 +1,41 @@
-use crate::config::TsidConfig;
+use crate::config::SnowIDConfig;
 
-/// TSID component extractor
+/// SnowID component extractor
 #[derive(Debug)]
-pub struct TsidExtractor {
-    config: TsidConfig,
+pub struct SnowIDExtractor {
+    config: SnowIDConfig,
 }
 
-impl TsidExtractor {
-    /// Create a new TSID extractor with the given configuration
-    pub(crate) fn new(config: TsidConfig) -> Self {
+impl SnowIDExtractor {
+    /// Create a new SnowID extractor with the given configuration
+    pub(crate) fn new(config: SnowIDConfig) -> Self {
         Self { config }
     }
 
-    /// Extract timestamp component from a TSID
+    /// Extract timestamp component from a SnowID
     #[inline]
-    pub fn timestamp(&self, tsid: u64) -> u64 {
-        (tsid >> self.config.timestamp_shift()) & self.config.timestamp_mask()
+    pub fn timestamp(&self, id: u64) -> u64 {
+        (id >> self.config.timestamp_shift()) & self.config.timestamp_mask()
     }
 
-    /// Extract node component from a TSID
+    /// Extract node component from a SnowID
     #[inline]
-    pub fn node(&self, tsid: u64) -> u16 {
-        ((tsid >> self.config.node_shift()) & self.config.node_mask() as u64) as u16
+    pub fn node(&self, id: u64) -> u16 {
+        ((id >> self.config.node_shift()) & self.config.node_mask() as u64) as u16
     }
 
-    /// Extract sequence component from a TSID
+    /// Extract sequence component from a SnowID
     #[inline]
-    pub fn sequence(&self, tsid: u64) -> u16 {
-        (tsid & self.config.sequence_mask() as u64) as u16
+    pub fn sequence(&self, id: u64) -> u16 {
+        (id & self.config.sequence_mask() as u64) as u16
     }
 
-    /// Decompose TSID into its components: timestamp, node ID, and sequence
-    pub fn decompose(&self, tsid: u64) -> (u64, u16, u16) {
+    /// Decompose SnowID into its components: timestamp, node ID, and sequence
+    pub fn decompose(&self, id: u64) -> (u64, u16, u16) {
         (
-            self.timestamp(tsid),
-            self.node(tsid),
-            self.sequence(tsid)
+            self.timestamp(id),
+            self.node(id),
+            self.sequence(id)
         )
     }
 }
@@ -43,30 +43,30 @@ impl TsidExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Tsid;
+    use crate::SnowID;
 
     #[test]
     fn test_decompose() {
-        let config = TsidConfig::default();
-        let tsid_gen = Tsid::with_config(42, config).unwrap();
+        let config = SnowIDConfig::default();
+        let snowid_gen = SnowID::with_config(42, config).unwrap();
 
-        // Create a known TSID value with specific components
+        // Create a known SnowID value with specific components
         let timestamp: u64 = 0x1234567;
         let node: u16 = 42;
         let sequence: u16 = 123;
 
-        // Create TSID using the generator's internal method
-        let tsid = ((timestamp & config.timestamp_mask()) << config.timestamp_shift())
+        // Create SnowID using the generator's internal method
+        let id = ((timestamp & config.timestamp_mask()) << config.timestamp_shift())
             | ((node as u64 & config.node_mask() as u64) << config.node_shift())
             | (sequence as u64 & config.sequence_mask() as u64);
 
         // Test individual component extraction
-        assert_eq!(tsid_gen.extract.timestamp(tsid), timestamp);
-        assert_eq!(tsid_gen.extract.node(tsid), node);
-        assert_eq!(tsid_gen.extract.sequence(tsid), sequence);
+        assert_eq!(snowid_gen.extract.timestamp(id), timestamp);
+        assert_eq!(snowid_gen.extract.node(id), node);
+        assert_eq!(snowid_gen.extract.sequence(id), sequence);
 
         // Test combined extraction
-        let (ext_timestamp, ext_node, ext_sequence) = tsid_gen.extract.decompose(tsid);
+        let (ext_timestamp, ext_node, ext_sequence) = snowid_gen.extract.decompose(id);
         assert_eq!(ext_timestamp, timestamp);
         assert_eq!(ext_node, node);
         assert_eq!(ext_sequence, sequence);
@@ -74,21 +74,21 @@ mod tests {
 
     #[test]
     fn test_component_boundaries() {
-        let config = TsidConfig::default();
-        let tsid_gen = Tsid::with_config(1, config).unwrap();
+        let config = SnowIDConfig::default();
+        let snowid_gen = SnowID::with_config(1, config).unwrap();
 
         // Test maximum values
         let max_timestamp = (1u64 << 42) - 1;
         let max_node_id = config.max_node_id();
         let max_sequence = config.max_sequence();
 
-        // Create TSID using maximum values
-        let tsid = ((max_timestamp & config.timestamp_mask()) << config.timestamp_shift())
+        // Create SnowID using maximum values
+        let id = ((max_timestamp & config.timestamp_mask()) << config.timestamp_shift())
             | ((max_node_id as u64 & config.node_mask() as u64) << config.node_shift())
             | (max_sequence as u64 & config.sequence_mask() as u64);
 
-        assert_eq!(tsid_gen.extract.timestamp(tsid), max_timestamp);
-        assert_eq!(tsid_gen.extract.node(tsid), max_node_id);
-        assert_eq!(tsid_gen.extract.sequence(tsid), max_sequence);
+        assert_eq!(snowid_gen.extract.timestamp(id), max_timestamp);
+        assert_eq!(snowid_gen.extract.node(id), max_node_id);
+        assert_eq!(snowid_gen.extract.sequence(id), max_sequence);
     }
 }

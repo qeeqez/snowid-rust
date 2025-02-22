@@ -3,11 +3,11 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use tsid_rust::Tsid;
+use snowid::SnowID;
 
 fn main() {
     // Create a thread-safe generator with Mutex for mutable access
-    let generator = Arc::new(Mutex::new(Tsid::new(1).unwrap()));
+    let generator = Arc::new(Mutex::new(SnowID::new(1).unwrap()));
     let mut handles = vec![];
 
     // Spawn multiple threads simulating distributed ID generation

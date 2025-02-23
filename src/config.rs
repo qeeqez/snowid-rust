@@ -66,7 +66,6 @@ impl SnowIDConfig {
         self.sequence_mask
     }
 
-
     // Internal methods used by SnowID and SnowIDExtractor
     #[inline]
     pub(crate) fn timestamp_shift(&self) -> u8 {

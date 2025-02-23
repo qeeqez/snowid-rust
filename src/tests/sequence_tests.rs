@@ -57,7 +57,7 @@ fn test_sequence_overflow_handling() {
     let mut overflow_handled = false;
 
     // Generate IDs rapidly to force sequence overflow
-    for _ in 0..10000 {
+    for _ in 0..100000 {
         let snowid = generator.generate();
         let (ts, _, sequence) = generator.extract.decompose(snowid);
 

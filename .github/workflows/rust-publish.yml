@@ -14,17 +14,13 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         include:
           - os: ubuntu-latest
-            artifact_name: snowid-linux
-            asset_name: snowid-linux-amd64
+            target: snowid-x86_64-unknown-linux-gnu
           - os: ubuntu-24.04-arm
-            artifact_name: snowid-linux-arm64
-            asset_name: snowid-linux-arm64
+            target: snowid-aarch64-unknown-linux-gnu
           - os: windows-latest
-            artifact_name: snowid-windows.exe
-            asset_name: snowid-windows-amd64.exe
+            target: snowid-x86_64-pc-windows-msvc
           - os: macos-latest
-            artifact_name: snowid-macos
-            asset_name: snowid-macos-amd64
+            target: snowid-aarch64-apple-darwin
         
     steps:
     - uses: actions/checkout@v4
@@ -66,7 +62,7 @@ jobs:
             snowid-linux/snowid-linux-amd64
             snowid-linux-arm64/snowid-linux-arm64
             snowid-windows/snowid-windows-amd64.exe
-            snowid-macos/snowid-macos-amd64
+            snowid-macos/snowid-macos-arm64
           draft: false
           prerelease: false
           generate_release_notes: true

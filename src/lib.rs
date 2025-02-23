@@ -14,7 +14,7 @@ pub use error::SnowIDError;
 pub use extractor::SnowIDExtractor;
 
 /// Main ID generator
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct SnowID {
     node_id: u16,
     pub config: SnowIDConfig,

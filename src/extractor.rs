@@ -1,7 +1,7 @@
 use crate::config::SnowIDConfig;
 
 /// SnowID component extractor
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct SnowIDExtractor {
     config: SnowIDConfig,
 }

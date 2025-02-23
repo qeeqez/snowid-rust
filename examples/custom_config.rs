@@ -3,6 +3,7 @@ use snowid::{SnowID, SnowIDConfig};
 fn main() {
     // Create a custom configuration for many nodes (12 bits = 4096 nodes)
     let config = SnowIDConfig::builder()
+        .epoch(1577836800000)
         .node_bits(16) // 12 bits for node ID = 4096 nodes
         .build();
 
@@ -13,7 +14,7 @@ fn main() {
     println!("  Node bits: {}", generator.config.node_bits());
     println!("  Sequence bits: {}", generator.config.sequence_bits());
     println!("  Max node ID: {}", generator.config.max_node_id());
-    println!("  Max sequence ID: {}", generator.config.max_sequence());
+    println!("  Max sequence ID: {}", generator.config.max_sequence_id());
 
     // Generate and analyze an ID
     let id = generator.generate();
@@ -30,6 +31,6 @@ fn main() {
     println!(
         "  Sequence: {} (of {})",
         seq,
-        generator.config.max_sequence()
+        generator.config.max_sequence_id()
     );
 }

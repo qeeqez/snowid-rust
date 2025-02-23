@@ -80,7 +80,7 @@ impl SnowID {
         } else {
             // For same timestamp or backwards clock, increment sequence
             self.sequence = self.sequence.wrapping_add(1);
-            if self.sequence > self.config.max_sequence() {
+            if self.sequence > self.config.max_sequence_id() {
                 // Sequence exhausted, wait for next millisecond
                 // If clock moved backwards, wait from last timestamp
                 let wait_from = if timestamp == self.last_timestamp {

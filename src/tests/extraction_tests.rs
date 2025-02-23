@@ -30,7 +30,7 @@ mod tests {
 
         // Verify configuration limits
         assert_eq!(generator.config.max_node_id(), 4095);
-        assert_eq!(generator.config.max_sequence(), 1023);
+        assert_eq!(generator.config.max_sequence_id(), 1023);
 
         // Generate and verify components
         let snowid = generator.generate();
@@ -65,7 +65,7 @@ mod tests {
     #[test]
     fn test_epoch_handling() {
         let custom_epoch = 1577836800000; // 2020-01-01 00:00:00 UTC
-        let config = SnowIDConfig::builder().custom_epoch(custom_epoch).build();
+        let config = SnowIDConfig::builder().epoch(custom_epoch).build();
 
         let mut generator = SnowID::with_config(1, config).unwrap();
         let snowid = generator.generate();

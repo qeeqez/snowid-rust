@@ -76,7 +76,7 @@ mod tests {
         // Test maximum values
         let max_timestamp = (1u64 << 42) - 1;
         let max_node_id = config.max_node_id();
-        let max_sequence = config.max_sequence();
+        let max_sequence = config.max_sequence_id();
 
         // Create SnowID using maximum values
         let id = ((max_timestamp & config.timestamp_mask()) << config.timestamp_shift())

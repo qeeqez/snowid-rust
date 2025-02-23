@@ -34,7 +34,7 @@ mod tests {
     fn test_component_boundaries() {
         let config = SnowIDConfig::builder()
             .node_bits(10)
-            .custom_epoch(0)
+            .epoch(0)
             .build();
 
         let mut generator = SnowID::with_config(1023, config).unwrap();
@@ -56,7 +56,7 @@ mod tests {
         // Test custom bit layout boundaries
         let custom_config = SnowIDConfig::builder()
             .node_bits(12)
-            .custom_epoch(0)
+            .epoch(0)
             .build();
 
         let mut custom_gen = SnowID::with_config(4095, custom_config).unwrap();
@@ -83,6 +83,6 @@ mod tests {
 
         assert!(timestamp <= generator.config.timestamp_mask());
         assert!(node <= generator.config.max_node_id());
-        assert!(sequence <= generator.config.max_sequence());
+        assert!(sequence <= generator.config.max_sequence_id());
     }
 }

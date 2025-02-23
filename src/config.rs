@@ -36,16 +36,22 @@ impl SnowIDConfig {
         SnowIDConfigBuilder::new()
     }
 
-    /// Get sequence bits derived from node bits
+    /// Get epoch timestamp
     #[inline]
-    pub fn sequence_bits(&self) -> u8 {
-        SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - self.node_bits
+    pub fn epoch(&self) -> u64 {
+        self.custom_epoch
     }
 
     /// Get node bits configuration
     #[inline]
     pub fn node_bits(&self) -> u8 {
         self.node_bits
+    }
+
+    /// Get sequence bits derived from node bits
+    #[inline]
+    pub fn sequence_bits(&self) -> u8 {
+        SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - self.node_bits
     }
 
     /// Get the maximum node ID supported by the current configuration
@@ -56,9 +62,10 @@ impl SnowIDConfig {
 
     /// Get the maximum sequence number supported by the current configuration
     #[inline]
-    pub fn max_sequence(&self) -> u16 {
+    pub fn max_sequence_id(&self) -> u16 {
         self.sequence_mask
     }
+
 
     // Internal methods used by SnowID and SnowIDExtractor
     #[inline]
@@ -146,7 +153,7 @@ impl SnowIDConfigBuilder {
     ///
     /// # Returns
     /// * `Self` - Builder instance for chaining
-    pub fn custom_epoch(mut self, epoch: u64) -> Self {
+    pub fn epoch(mut self, epoch: u64) -> Self {
         self.custom_epoch = epoch;
         self
     }
@@ -210,7 +217,7 @@ mod tests {
     fn test_custom_config() {
         let config = SnowIDConfig::builder()
             .node_bits(12)
-            .custom_epoch(1640995200000) // 2022-01-01
+            .epoch(1640995200000) // 2022-01-01
             .build();
 
         assert_eq!(config.node_bits(), 12);
@@ -243,7 +250,7 @@ mod tests {
         assert_eq!(config.sequence_mask(), 0xFFF);
         assert_eq!(config.node_mask(), 0x3FF);
         assert_eq!(config.timestamp_mask(), (1u64 << 42) - 1);
-        assert_eq!(config.max_sequence(), 0xFFF);
+        assert_eq!(config.max_sequence_id(), 0xFFF);
         assert_eq!(config.max_node_id(), 0x3FF);
     }
 }

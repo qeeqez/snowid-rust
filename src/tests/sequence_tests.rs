@@ -27,10 +27,10 @@ fn test_sequence_rollover() {
                     "Should have seen some sequence increment"
                 );
                 assert!(
-                    max_sequence_seen <= generator.config.max_sequence(),
+                    max_sequence_seen <= generator.config.max_sequence_id(),
                     "Sequence {} exceeded maximum {}",
                     max_sequence_seen,
-                    generator.config.max_sequence()
+                    generator.config.max_sequence_id()
                 );
                 return; // Test passed - we found a sequence rollover
             }
@@ -70,7 +70,7 @@ fn test_sequence_overflow_handling() {
                 );
             } else {
                 // On timestamp change, check if it was due to sequence overflow
-                if prev_seq >= generator.config.max_sequence() {
+                if prev_seq >= generator.config.max_sequence_id() {
                     assert!(
                         ts > prev_ts,
                         "Timestamp should advance on sequence overflow"

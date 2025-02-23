@@ -53,8 +53,8 @@ use snowid::{SnowID, SnowIDConfig};
 fn main() {
     // Create custom configuration
     let config = SnowIDConfig::builder()
-        .custom_epoch(1577836800000) // 2020-01-01 00:00:00 UTC
-        .node_bits(10)               // Supports up to 1024 nodes
+        .epoch(1577836800000) // 2020-01-01 00:00:00 UTC
+        .node_bits(8)         // Supports 255 nodes
         .build();
 
     // Create generator with custom config
@@ -81,7 +81,7 @@ fn main() {
     // Configuration information
     let max_node = gen.max_node_id();          // Get maximum allowed node ID
     let node_bits = gen.node_bits();           // Get number of bits used for node ID
-    let max_seq = gen.config.max_sequence();    // Get maximum sequence per millisecond
+    let max_seq = gen.config.max_sequence_id();    // Get maximum sequence per millisecond
     let timestamp_bits = SnowID::TIMESTAMP_BITS; // Get number of bits used for timestamp (42)
 }
 ```

@@ -20,7 +20,7 @@ pub fn node_bits_comparison(c: &mut Criterion) {
                 node_bits, max_nodes, max_sequence
             ),
             |b| {
-                let mut generator = SnowID::with_config(1, config).unwrap();
+                let generator = SnowID::with_config(1, config).unwrap();
                 b.iter(|| {
                     black_box(generator.generate());
                 });
@@ -33,7 +33,7 @@ pub fn node_bits_comparison(c: &mut Criterion) {
 
 pub fn component_extraction_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Component Extraction");
-    let mut generator = SnowID::new(1).unwrap();
+    let generator = SnowID::new(1).unwrap();
     let snowid = generator.generate();
 
     group.bench_function("extract_components", |b| {

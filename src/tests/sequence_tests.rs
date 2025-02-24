@@ -36,7 +36,10 @@ fn test_sequence_rollover() {
             }
         } else if i > 0 {
             // If timestamp changed and we've generated at least one ID
-            assert!(seq <= 1, "Sequence should be 0 or 1 on timestamp change due to atomic increment");
+            assert!(
+                seq <= 1,
+                "Sequence should be 0 or 1 on timestamp change due to atomic increment"
+            );
             return; // Test passed - sequence reset on timestamp change
         }
 
@@ -68,7 +71,7 @@ fn test_sequence_overflow_handling() {
                     sequence > prev_seq,
                     "Sequence should increment within same millisecond"
                 );
-                
+
                 // Check if we've hit the max sequence
                 if sequence >= generator.config.max_sequence_id() {
                     // Next ID should be in a new millisecond

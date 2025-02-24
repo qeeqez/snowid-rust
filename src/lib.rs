@@ -1,7 +1,7 @@
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 mod config;
 mod error;
@@ -97,17 +97,17 @@ impl SnowID {
             } else {
                 // For same timestamp or backwards clock
                 let current_sequence = self.sequence.fetch_add(1, Ordering::AcqRel);
-                
+
                 if current_sequence < self.config.max_sequence_id() {
                     // We got a valid sequence number
                     break;
                 }
-                
+
                 // Sequence exhausted, wait for next millisecond with exponential backoff
                 let wait_from = timestamp.max(last_ts);
                 timestamp = self.wait_next_millis(wait_from, backoff);
                 backoff = (backoff * 2).min(Self::MAX_BACKOFF_MS);
-                
+
                 // Update last_ts for next iteration
                 last_ts = self.last_timestamp.load(Ordering::Acquire);
             }
@@ -121,14 +121,17 @@ impl SnowID {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards");
-            
+
         let current_time = now.as_millis() as u64;
         let epoch_time = self.config.epoch();
-        
+
         if current_time <= epoch_time {
-            panic!("Current time {} is before epoch {}", current_time, epoch_time);
+            panic!(
+                "Current time {} is before epoch {}",
+                current_time, epoch_time
+            );
         }
-        
+
         current_time - epoch_time
     }
 
@@ -136,12 +139,12 @@ impl SnowID {
     fn wait_next_millis(&self, timestamp: u64, backoff_ms: u64) -> u64 {
         thread::sleep(Duration::from_millis(backoff_ms));
         let mut new_timestamp = self.get_time_since_epoch();
-        
+
         while new_timestamp <= timestamp {
             thread::yield_now();
             new_timestamp = self.get_time_since_epoch();
         }
-        
+
         new_timestamp
     }
 

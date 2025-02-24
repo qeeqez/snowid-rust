@@ -91,11 +91,6 @@ impl SnowIDConfig {
     pub(crate) fn sequence_mask(&self) -> u16 {
         self.sequence_mask
     }
-
-    #[inline]
-    pub(crate) fn custom_epoch(&self) -> u64 {
-        self.custom_epoch
-    }
 }
 
 impl Default for SnowIDConfig {
@@ -221,7 +216,7 @@ mod tests {
 
         assert_eq!(config.node_bits(), 12);
         assert_eq!(config.sequence_bits(), 10); // 22 - 12
-        assert_eq!(config.custom_epoch(), 1640995200000);
+        assert_eq!(config.epoch(), 1640995200000);
     }
 
     #[test]
@@ -232,7 +227,7 @@ mod tests {
             config.sequence_bits(),
             SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - DEFAULT_NODE_BITS
         );
-        assert_eq!(config.custom_epoch(), DEFAULT_CUSTOM_EPOCH);
+        assert_eq!(config.epoch(), DEFAULT_CUSTOM_EPOCH);
     }
 
     #[test]

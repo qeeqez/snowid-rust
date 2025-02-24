@@ -18,13 +18,13 @@ mod tests {
     #[test]
     fn test_node_id_boundaries() {
         // Test minimum node ID
-        let mut gen0 = SnowID::new(0).unwrap();
+        let gen0 = SnowID::new(0).unwrap();
         let snowid0 = gen0.generate();
         let (_, node0, _) = gen0.extract.decompose(snowid0);
         assert_eq!(node0, 0);
 
         // Test maximum node ID
-        let mut gen1023 = SnowID::new(1023).unwrap();
+        let gen1023 = SnowID::new(1023).unwrap();
         let snowid1023 = gen1023.generate();
         let (_, node1023, _) = gen1023.extract.decompose(snowid1023);
         assert_eq!(node1023, 1023);
@@ -34,7 +34,7 @@ mod tests {
     fn test_component_boundaries() {
         let config = SnowIDConfig::builder().node_bits(10).epoch(0).build();
 
-        let mut generator = SnowID::with_config(1023, config).unwrap();
+        let generator = SnowID::with_config(1023, config).unwrap();
 
         // Test timestamp boundaries
         let snowid = generator.generate();
@@ -53,7 +53,7 @@ mod tests {
         // Test custom bit layout boundaries
         let custom_config = SnowIDConfig::builder().node_bits(12).epoch(0).build();
 
-        let mut custom_gen = SnowID::with_config(4095, custom_config).unwrap();
+        let custom_gen = SnowID::with_config(4095, custom_config).unwrap();
         let snowid = custom_gen.generate();
         let (_, node, sequence) = custom_gen.extract.decompose(snowid);
 
@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn test_zero_node_id() {
-        let mut generator = SnowID::new(0).unwrap();
+        let generator = SnowID::new(0).unwrap();
         let snowid = generator.generate();
         let (_, node, _) = generator.extract.decompose(snowid);
         assert_eq!(node, 0);
@@ -71,7 +71,7 @@ mod tests {
 
     #[test]
     fn test_component_max_values() {
-        let mut generator = SnowID::new(1023).unwrap();
+        let generator = SnowID::new(1023).unwrap();
         let snowid = generator.generate();
         let (timestamp, node, sequence) = generator.extract.decompose(snowid);
 

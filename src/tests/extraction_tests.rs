@@ -6,7 +6,7 @@ mod tests {
     #[test]
     fn test_snowid_generation_and_extraction() {
         // Test basic generation and extraction
-        let mut generator = SnowID::new(42).unwrap();
+        let generator = SnowID::new(42).unwrap();
         let snowid1 = generator.generate();
 
         assert_eq!(generator.extract.node(snowid1), 42);
@@ -26,7 +26,7 @@ mod tests {
     fn test_custom_configuration() {
         let config = SnowIDConfig::builder().node_bits(12).build();
 
-        let mut generator = SnowID::with_config(1023, config).unwrap();
+        let generator = SnowID::with_config(1023, config).unwrap();
 
         // Verify configuration limits
         assert_eq!(generator.config.max_node_id(), 4095);
@@ -47,8 +47,8 @@ mod tests {
 
     #[test]
     fn test_unique_ids_across_nodes() {
-        let mut gen1 = SnowID::new(1).unwrap();
-        let mut gen2 = SnowID::new(2).unwrap();
+        let gen1 = SnowID::new(1).unwrap();
+        let gen2 = SnowID::new(2).unwrap();
 
         let mut ids = HashSet::new();
 
@@ -67,7 +67,7 @@ mod tests {
         let custom_epoch = 1577836800000; // 2020-01-01 00:00:00 UTC
         let config = SnowIDConfig::builder().epoch(custom_epoch).build();
 
-        let mut generator = SnowID::with_config(1, config).unwrap();
+        let generator = SnowID::with_config(1, config).unwrap();
         let snowid = generator.generate();
         let timestamp = generator.extract.timestamp(snowid);
 

@@ -2,11 +2,11 @@ use crate::*;
 
 #[test]
 fn test_clock_backwards() {
-    let mut generator = SnowID::new(1).unwrap();
+    let generator = SnowID::new(1).unwrap();
     let snowid1 = generator.generate();
 
     // Simulate clock moving backwards by saving current timestamp
-    let original_timestamp = generator.last_timestamp;
+    let original_timestamp = generator.last_timestamp.load(Ordering::SeqCst);
 
     // Generate another ID - it should handle backwards clock gracefully
     let snowid2 = generator.generate();

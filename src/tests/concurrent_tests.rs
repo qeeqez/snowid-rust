@@ -19,7 +19,7 @@ mod tests {
             handles.push(thread::spawn(move || {
                 (0..ids_per_thread)
                     .map(|_| {
-                        let mut gen = gen.lock().unwrap();
+                        let gen = gen.lock().unwrap();
                         gen.generate()
                     })
                     .collect::<Vec<_>>()
@@ -58,7 +58,7 @@ mod tests {
 
     #[test]
     fn test_rapid_generation() {
-        let mut generator = SnowID::new(1).unwrap();
+        let generator = SnowID::new(1).unwrap();
         let mut ids = HashSet::new();
         let iterations = 1000;
 
@@ -80,8 +80,8 @@ mod tests {
 
     #[test]
     fn test_timestamp_monotonicity() {
-        let mut generator = SnowID::new(1).unwrap();
-        let mut last_timestamp = 0;
+        let generator = SnowID::new(1).unwrap();
+        let mut last_timestamp: u64 = 0;
 
         for _ in 0..100 {
             let snowid = generator.generate();

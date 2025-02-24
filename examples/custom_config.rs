@@ -8,13 +8,14 @@ fn main() {
         .build();
 
     // Create generator with node ID 42
-    let mut generator = SnowID::with_config(1, config).unwrap();
+    let generator = SnowID::with_config(1, config).unwrap();
 
     println!("Generator configuration:");
     println!("  Node bits: {}", generator.config.node_bits());
     println!("  Sequence bits: {}", generator.config.sequence_bits());
     println!("  Max node ID: {}", generator.config.max_node_id());
     println!("  Max sequence ID: {}", generator.config.max_sequence_id());
+    println!("  Epoch: {}", generator.config.epoch());
 
     // Generate and analyze an ID
     let id = generator.generate();

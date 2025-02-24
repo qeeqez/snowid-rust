@@ -21,7 +21,7 @@ fn main() {
             for i in 0..5 {
                 // Lock the generator to generate ID
                 let id = {
-                    let mut gen = gen.lock().unwrap();
+                    let gen = gen.lock().unwrap();
                     gen.generate()
                 };
 

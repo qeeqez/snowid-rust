@@ -32,14 +32,14 @@
 
 ```toml
 [dependencies]
-snowid = "0.1.2"
+snowid = "0.1.3"
 ```
 
 ```rust
 use snowid::SnowID;
 
 fn main() {
-    let mut gen = SnowID::new(1).unwrap();
+    let gen = SnowID::new(1).unwrap();
     let id = gen.generate();
     println!("Generated ID: {}", id);
 }
@@ -58,7 +58,7 @@ fn main() {
         .build();
 
     // Create generator with custom config
-    let mut gen = SnowID::with_config(1, config).unwrap();
+    let gen = SnowID::with_config(1, config).unwrap();
 }
 ```
 
@@ -67,7 +67,7 @@ fn main() {
 use snowid::SnowID;
 
 fn main() {
-    let mut gen = SnowID::new(1).unwrap();
+    let gen = SnowID::new(1).unwrap();
     let id = gen.generate();
 
     // Extract individual components

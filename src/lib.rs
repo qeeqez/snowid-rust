@@ -6,9 +6,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 mod config;
 mod error;
 mod extractor;
+pub mod tests;
 
-#[cfg(test)]
-mod tests;
+pub use config::SnowIDConfig;
+pub use error::SnowIDError;
+pub use extractor::SnowIDExtractor;
 
 // Re-export base62 functions from the external crate with appropriate type conversions
 pub fn base62_encode(id: u64) -> String {
@@ -18,17 +20,16 @@ pub fn base62_encode(id: u64) -> String {
     String::from_utf8_lossy(&buf[..len]).into_owned()
 }
 
+// Decode a base62 string to a u64, handling potential overflow
 pub fn base62_decode(encoded: &str) -> Result<u64, Base62DecodeError> {
-    match base62::decode(encoded) {
-        Ok(value) => {
-            // Ensure the decoded value fits in a u64
-            if value > u64::MAX as u128 {
-                return Err(Base62DecodeError::Overflow);
-            }
-            Ok(value as u64)
-        }
-        Err(e) => Err(Base62DecodeError::Other(e)),
+    let decoded = base62::decode(encoded).map_err(Base62DecodeError::from)?;
+
+    // Check if the decoded value fits in a u64
+    if decoded > u64::MAX as u128 {
+        return Err(Base62DecodeError::Overflow);
     }
+
+    Ok(decoded as u64)
 }
 
 // Define our own error type that wraps the external crate's error
@@ -44,17 +45,22 @@ pub enum Base62DecodeError {
     Other(#[from] base62::DecodeError),
 }
 
-pub use config::SnowIDConfig;
-pub use error::SnowIDError;
-pub use extractor::SnowIDExtractor;
-
 /// Main ID generator
 #[derive(Debug)]
 pub struct SnowID {
-    node_id: u16,
+    /// Node ID for this generator
+    pub node_id: u16,
+
+    /// Configuration for this generator
     pub config: SnowIDConfig,
+
+    /// Extractor for decomposing IDs
     pub extract: SnowIDExtractor,
+
+    /// Last timestamp used to generate an ID
     last_timestamp: AtomicU64,
+
+    /// Sequence counter for IDs generated in the same millisecond
     sequence: AtomicU16,
 }
 
@@ -85,17 +91,21 @@ impl SnowID {
     /// # Returns
     /// * `Result<SnowID, Error>` - New SnowID generator or error if node_id is invalid
     pub fn with_config(node_id: u16, config: SnowIDConfig) -> Result<Self, SnowIDError> {
+        // Validate node ID
         if node_id > config.max_node_id() {
             return Err(SnowIDError::InvalidNodeId {
                 node_id,
-                max: (1 << config.node_bits()) - 1,
+                max: config.max_node_id(),
             });
         }
 
+        // Create extractor with the same configuration
+        let extract = SnowIDExtractor::new(config);
+
         Ok(Self {
             node_id,
-            extract: SnowIDExtractor::new(config),
             config,
+            extract,
             last_timestamp: AtomicU64::new(0),
             sequence: AtomicU16::new(0),
         })
@@ -105,6 +115,7 @@ impl SnowID {
     ///
     /// # Returns
     /// * `u64` - New SnowID value
+    #[inline]
     pub fn generate(&self) -> u64 {
         let mut timestamp = self.get_time_since_epoch();
         let mut last_ts = self.last_timestamp.load(Ordering::Acquire);
@@ -154,32 +165,29 @@ impl SnowID {
     fn get_time_since_epoch(&self) -> u64 {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
+            .expect("System time before Unix epoch!");
 
-        let current_time = now.as_millis() as u64;
-        let epoch_time = self.config.epoch();
-
-        if current_time <= epoch_time {
-            panic!(
-                "Current time {} is before epoch {}",
-                current_time, epoch_time
-            );
-        }
-
-        current_time - epoch_time
+        // Convert to milliseconds and subtract the custom epoch
+        let millis = now.as_millis() as u64;
+        millis.saturating_sub(self.config.epoch())
     }
 
     /// Wait until next millisecond with exponential backoff
     fn wait_next_millis(&self, timestamp: u64, backoff_ms: u64) -> u64 {
+        // Sleep for a short time
         thread::sleep(Duration::from_millis(backoff_ms));
-        let mut new_timestamp = self.get_time_since_epoch();
 
-        while new_timestamp <= timestamp {
-            thread::yield_now();
-            new_timestamp = self.get_time_since_epoch();
+        // Get new timestamp
+        let new_ts = self.get_time_since_epoch();
+        if new_ts <= timestamp {
+            // If still not advanced, recurse with exponential backoff
+            self.wait_next_millis(
+                timestamp,
+                backoff_ms.saturating_mul(2).min(Self::MAX_BACKOFF_MS),
+            )
+        } else {
+            new_ts
         }
-
-        new_timestamp
     }
 
     #[inline]
@@ -193,51 +201,13 @@ impl SnowID {
             | ((node_id as u64 & self.config.node_mask() as u64) << self.config.node_shift())
             | (sequence as u64 & self.config.sequence_mask() as u64)
     }
-}
-
-/// Base62 encoded ID generator
-#[derive(Debug)]
-pub struct SnowIDBase62 {
-    /// Internal SnowID generator
-    pub snowid: SnowID,
-}
-
-impl SnowIDBase62 {
-    /// Create a new SnowIDBase62 generator with default configuration
-    ///
-    /// # Arguments
-    ///
-    /// * `node_id` - Node ID to use in generated IDs
-    ///
-    /// # Returns
-    /// * `Result<SnowIDBase62, SnowIDError>` - New SnowIDBase62 generator or error if node_id is invalid
-    pub fn new(node_id: u16) -> Result<Self, SnowIDError> {
-        Ok(Self {
-            snowid: SnowID::new(node_id)?,
-        })
-    }
-
-    /// Create a new SnowIDBase62 generator with custom configuration
-    ///
-    /// # Arguments
-    ///
-    /// * `node_id` - Node ID to use in generated IDs
-    /// * `config` - Custom configuration
-    ///
-    /// # Returns
-    /// * `Result<SnowIDBase62, SnowIDError>` - New SnowIDBase62 generator or error if node_id is invalid
-    pub fn with_config(node_id: u16, config: SnowIDConfig) -> Result<Self, SnowIDError> {
-        Ok(Self {
-            snowid: SnowID::with_config(node_id, config)?,
-        })
-    }
 
     /// Generate a new base62 encoded SnowID
     ///
     /// # Returns
     /// * `String` - New base62 encoded SnowID value
-    pub fn generate(&self) -> String {
-        let id = self.snowid.generate();
+    pub fn generate_base62(&self) -> String {
+        let id = self.generate();
         base62_encode(id)
     }
 
@@ -245,8 +215,8 @@ impl SnowIDBase62 {
     ///
     /// # Returns
     /// * `(String, u64)` - Tuple containing the base62 encoded SnowID and the raw u64 value
-    pub fn generate_with_raw(&self) -> (String, u64) {
-        let id = self.snowid.generate();
+    pub fn generate_base62_with_raw(&self) -> (String, u64) {
+        let id = self.generate();
         (base62_encode(id), id)
     }
 
@@ -257,7 +227,7 @@ impl SnowIDBase62 {
     ///
     /// # Returns
     /// * `Result<u64, Base62DecodeError>` - The decoded u64 SnowID or an error
-    pub fn decode(&self, encoded: &str) -> Result<u64, Base62DecodeError> {
+    pub fn decode_base62(&self, encoded: &str) -> Result<u64, Base62DecodeError> {
         base62_decode(encoded)
     }
 
@@ -268,9 +238,9 @@ impl SnowIDBase62 {
     ///
     /// # Returns
     /// * `Result<(u64, u16, u16), Base62DecodeError>` - Tuple containing the components or an error
-    pub fn decompose(&self, encoded: &str) -> Result<(u64, u16, u16), Base62DecodeError> {
-        let id = self.decode(encoded)?;
-        Ok(self.snowid.extract.decompose(id))
+    pub fn decompose_base62(&self, encoded: &str) -> Result<(u64, u16, u16), Base62DecodeError> {
+        let id = self.decode_base62(encoded)?;
+        Ok(self.extract.decompose(id))
     }
 }
 
@@ -280,19 +250,19 @@ mod base62_tests {
 
     #[test]
     fn test_base62_generate() {
-        let generator = SnowIDBase62::new(1).unwrap();
+        let generator = SnowID::new(1).unwrap();
 
         // Generate a base62 ID
-        let id = generator.generate();
+        let id = generator.generate_base62();
 
         // It should be a non-empty string
         assert!(!id.is_empty());
 
         // It should be decodable
-        let decoded = generator.decode(&id).unwrap();
+        let decoded = generator.decode_base62(&id).unwrap();
 
         // The decoded value should be a valid SnowID
-        let (timestamp, node_id, sequence) = generator.snowid.extract.decompose(decoded);
+        let (timestamp, node_id, sequence) = generator.extract.decompose(decoded);
 
         // Check that the node ID is correct
         assert_eq!(node_id, 1);
@@ -301,15 +271,15 @@ mod base62_tests {
         assert!(timestamp > 0);
 
         // Sequence should be within bounds
-        assert!(sequence <= generator.snowid.config.max_sequence_id());
+        assert!(sequence <= generator.config.max_sequence_id());
     }
 
     #[test]
     fn test_base62_with_raw() {
-        let generator = SnowIDBase62::new(1).unwrap();
+        let generator = SnowID::new(1).unwrap();
 
         // Generate a base62 ID with raw value
-        let (id, raw) = generator.generate_with_raw();
+        let (id, raw) = generator.generate_base62_with_raw();
 
         // Check that the encoded ID decodes to the raw value
         assert_eq!(base62_decode(&id).unwrap(), raw);
@@ -317,13 +287,13 @@ mod base62_tests {
 
     #[test]
     fn test_base62_decompose() {
-        let generator = SnowIDBase62::new(1).unwrap();
+        let generator = SnowID::new(1).unwrap();
 
         // Generate a base62 ID
-        let id = generator.generate();
+        let id = generator.generate_base62();
 
         // Decompose it
-        let (timestamp, node_id, sequence) = generator.decompose(&id).unwrap();
+        let (timestamp, node_id, sequence) = generator.decompose_base62(&id).unwrap();
 
         // Check that the node ID is correct
         assert_eq!(node_id, 1);
@@ -332,6 +302,6 @@ mod base62_tests {
         assert!(timestamp > 0);
 
         // Sequence should be within bounds
-        assert!(sequence <= generator.snowid.config.max_sequence_id());
+        assert!(sequence <= generator.config.max_sequence_id());
     }
 }

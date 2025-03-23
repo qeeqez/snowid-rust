@@ -1,10 +1,10 @@
-use snowid::{base62_encode, SnowID, SnowIDBase62};
+use snowid::{base62_encode, SnowID};
 use std::time::{Duration, Instant};
 
 fn main() {
     // Create generators
     let int_gen = SnowID::new(1).unwrap();
-    let base62_gen = SnowIDBase62::new(1).unwrap();
+    let base62_gen = SnowID::new(1).unwrap();
 
     // Number of IDs to generate for each test
     let iterations = 100_000;
@@ -23,7 +23,7 @@ fn main() {
     let start = Instant::now();
     let mut base62_ids = Vec::with_capacity(iterations);
     for _ in 0..iterations {
-        base62_ids.push(base62_gen.generate());
+        base62_ids.push(base62_gen.generate_base62());
     }
     let base62_duration = start.elapsed();
 

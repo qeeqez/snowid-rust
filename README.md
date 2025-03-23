@@ -35,7 +35,7 @@
 
 ```toml
 [dependencies]
-snowid = "0.1.5"
+snowid = "0.1.6"
 ```
 
 ```rust
@@ -53,26 +53,26 @@ fn main() {
 Generate base62 encoded IDs (using characters 0-9, a-z, A-Z) for more compact and URL-friendly identifiers:
 
 ```rust
-use snowid::SnowIDBase62;
+use snowid::SnowID;
 
 fn main() {
-    // Create a base62 generator
-    let gen = SnowIDBase62::new(1).unwrap();
+    // Create a generator
+    let gen = SnowID::new(1).unwrap();
 
     // Generate a base62 encoded ID
-    let encoded_id = gen.generate();
+    let encoded_id = gen.generate_base62();
     println!("Base62 ID: {}", encoded_id); // Example: "2qPfVQh7Jw9"
 
     // Generate with raw value
-    let (encoded_id, raw_id) = gen.generate_with_raw();
+    let (encoded_id, raw_id) = gen.generate_base62_with_raw();
     println!("Base62: {}, Raw: {}", encoded_id, raw_id);
 
     // Decode a base62 ID back to u64
-    let decoded = gen.decode(&encoded_id).unwrap();
+    let decoded = gen.decode_base62(&encoded_id).unwrap();
     assert_eq!(decoded, raw_id);
 
     // Extract components from a base62 ID
-    let (timestamp, node, sequence) = gen.decompose(&encoded_id).unwrap();
+    let (timestamp, node, sequence) = gen.decompose_base62(&encoded_id).unwrap();
     println!("Timestamp: {}, Node: {}, Sequence: {}", timestamp, node, sequence);
 }
 ```
@@ -108,9 +108,19 @@ use snowid::SnowID;
 
 fn main() {
     let gen = SnowID::new(1).unwrap();
+    
+    // Generate numeric IDs
     let id = gen.generate();
+    
+    // Generate Base62 encoded IDs
+    let base62_id = gen.generate_base62();
+    let (base62_id, raw_id) = gen.generate_base62_with_raw();
+    
+    // Decode Base62 IDs
+    let decoded = gen.decode_base62(&base62_id).unwrap();
+    let (ts, node, seq) = gen.decompose_base62(&base62_id).unwrap();
 
-    // Extract individual components
+    // Extract individual components from numeric IDs
     let timestamp = gen.extract.timestamp(id);  // Get timestamp from ID
     let node = gen.extract.node(id);           // Get node ID from ID
     let sequence = gen.extract.sequence(id);    // Get sequence from ID
@@ -119,8 +129,8 @@ fn main() {
     let (ts, node, seq) = gen.extract.decompose(id);
 
     // Configuration information
-    let max_node = gen.max_node_id();          // Get maximum allowed node ID
-    let node_bits = gen.node_bits();           // Get number of bits used for node ID
+    let max_node = gen.config.max_node_id();          // Get maximum allowed node ID
+    let node_bits = gen.config.node_bits();           // Get number of bits used for node ID
     let max_seq = gen.config.max_sequence_id();    // Get maximum sequence per millisecond
     let timestamp_bits = SnowID::TIMESTAMP_BITS; // Get number of bits used for timestamp (42)
 }

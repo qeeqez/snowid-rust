@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use snowid::{base62_decode, base62_encode, SnowID, SnowIDBase62};
+use snowid::{base62_decode, base62_encode, SnowID};
 
 // Common test values used across benchmarks
 const TEST_VALUES: [u64; 5] = [
@@ -13,18 +13,17 @@ const TEST_VALUES: [u64; 5] = [
 pub fn id_generation_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("ID Generation Comparison");
 
-    // Create generators once
-    let int_generator = SnowID::new(1).unwrap();
-    let base62_generator = SnowIDBase62::new(1).unwrap();
+    // Create generator once
+    let generator = SnowID::new(1).unwrap();
 
     // Benchmark int64 generation
     group.bench_function("int64_generation", |b| {
-        b.iter(|| black_box(int_generator.generate()));
+        b.iter(|| black_box(generator.generate()));
     });
 
     // Benchmark base62 generation
     group.bench_function("base62_generation", |b| {
-        b.iter(|| black_box(base62_generator.generate()));
+        b.iter(|| black_box(generator.generate_base62()));
     });
 
     group.finish();

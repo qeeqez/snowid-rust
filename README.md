@@ -35,7 +35,7 @@
 
 ```toml
 [dependencies]
-snowid = "0.1.3"
+snowid = "0.1.5"
 ```
 
 ```rust
@@ -128,16 +128,6 @@ fn main() {
 
 ## 📊 Performance & Comparisons
 
-### Int64 vs Base62 Performance
-
-| Variant               | Time/ID | Size         | Notes                            |
-|-----------------------|---------|--------------|----------------------------------|
-| Int64                 | ~348 ns | 18-20 digits | Fastest option                   |
-| Base62                | ~403 ns | 10-11 chars  | ~16% slower, more compact        |
-| Int64 + manual Base62 | ~420 ns | 10-11 chars  | Separate generation and encoding |
-
-Base62 encoding provides more compact, URL-friendly IDs with a small performance trade-off.
-
 ### Social Media Platform Configurations
 
 | Platform  | Timestamp | Node Bits | Sequence Bits | Max Nodes | IDs/ms/node | Time/ID |
@@ -162,6 +152,15 @@ Choose configuration based on your needs:
 - More nodes → Increase node bits (max 16 bits = 65,536 nodes)
 - More IDs per node → Increase sequence bits (min 6 node bits = 64 nodes)
 - Total bits (node + sequence) is fixed at 22 bits
+
+### Int64 vs Base62 Performance
+
+| Variant               | Time/ID | Size         | Notes                    |
+|-----------------------|---------|--------------|--------------------------|
+| Int64                 | ~325 ns | 18-20 digits | Fastest option           |
+| Base62                | ~350 ns | 10-11 chars  | ~8% slower, more compact |
+
+Base62 encoding provides more compact, URL-friendly IDs with a small performance trade-off.
 
 ## 🚀 Examples
 

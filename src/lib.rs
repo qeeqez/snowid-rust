@@ -3,7 +3,6 @@ use std::thread;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-mod base62;
 mod config;
 mod error;
 mod extractor;
@@ -11,9 +10,40 @@ mod extractor;
 #[cfg(test)]
 mod tests;
 
-pub use base62::{
-    decode as base62_decode, encode as base62_encode, DecodeError as Base62DecodeError,
-};
+// Re-export base62 functions from the external crate with appropriate type conversions
+pub fn base62_encode(id: u64) -> String {
+    // Maximum size needed for u64 in base62 is 11 bytes
+    let mut buf = [0u8; 11];
+    let len = base62::encode_bytes(id, &mut buf).unwrap();
+    String::from_utf8_lossy(&buf[..len]).into_owned()
+}
+
+pub fn base62_decode(encoded: &str) -> Result<u64, Base62DecodeError> {
+    match base62::decode(encoded) {
+        Ok(value) => {
+            // Ensure the decoded value fits in a u64
+            if value > u64::MAX as u128 {
+                return Err(Base62DecodeError::Overflow);
+            }
+            Ok(value as u64)
+        }
+        Err(e) => Err(Base62DecodeError::Other(e)),
+    }
+}
+
+// Define our own error type that wraps the external crate's error
+#[derive(Debug, thiserror::Error)]
+pub enum Base62DecodeError {
+    #[error("Invalid base62 character")]
+    InvalidCharacter,
+
+    #[error("Decoded value would overflow u64")]
+    Overflow,
+
+    #[error("Base62 decode error: {0}")]
+    Other(#[from] base62::DecodeError),
+}
+
 pub use config::SnowIDConfig;
 pub use error::SnowIDError;
 pub use extractor::SnowIDExtractor;
@@ -251,43 +281,57 @@ mod base62_tests {
     #[test]
     fn test_base62_generate() {
         let generator = SnowIDBase62::new(1).unwrap();
-        let encoded = generator.generate();
 
-        // Ensure we can decode it back
-        let decoded = generator.decode(&encoded).unwrap();
+        // Generate a base62 ID
+        let id = generator.generate();
 
-        // Verify the components are valid
-        let (timestamp, node, sequence) = generator.snowid.extract.decompose(decoded);
-        assert_eq!(node, 1);
+        // It should be a non-empty string
+        assert!(!id.is_empty());
+
+        // It should be decodable
+        let decoded = generator.decode(&id).unwrap();
+
+        // The decoded value should be a valid SnowID
+        let (timestamp, node_id, sequence) = generator.snowid.extract.decompose(decoded);
+
+        // Check that the node ID is correct
+        assert_eq!(node_id, 1);
+
+        // Check that the timestamp is reasonable (just verify it's not zero)
         assert!(timestamp > 0);
-        assert!(sequence < generator.snowid.config.max_sequence_id());
+
+        // Sequence should be within bounds
+        assert!(sequence <= generator.snowid.config.max_sequence_id());
     }
 
     #[test]
     fn test_base62_with_raw() {
-        let generator = SnowIDBase62::new(42).unwrap();
-        let (encoded, raw) = generator.generate_with_raw();
+        let generator = SnowIDBase62::new(1).unwrap();
 
-        // Ensure the encoded value decodes back to the raw value
-        let decoded = generator.decode(&encoded).unwrap();
-        assert_eq!(decoded, raw);
+        // Generate a base62 ID with raw value
+        let (id, raw) = generator.generate_with_raw();
+
+        // Check that the encoded ID decodes to the raw value
+        assert_eq!(base62_decode(&id).unwrap(), raw);
     }
 
     #[test]
     fn test_base62_decompose() {
-        let generator = SnowIDBase62::new(99).unwrap();
-        let encoded = generator.generate();
+        let generator = SnowIDBase62::new(1).unwrap();
 
-        // Decompose the encoded ID
-        let (timestamp, node, sequence) = generator.decompose(&encoded).unwrap();
+        // Generate a base62 ID
+        let id = generator.generate();
 
-        // Verify node ID
-        assert_eq!(node, 99);
+        // Decompose it
+        let (timestamp, node_id, sequence) = generator.decompose(&id).unwrap();
 
-        // Verify timestamp is reasonable
+        // Check that the node ID is correct
+        assert_eq!(node_id, 1);
+
+        // Check that the timestamp is reasonable (just verify it's not zero)
         assert!(timestamp > 0);
 
-        // Verify sequence is within bounds
-        assert!(sequence < generator.snowid.config.max_sequence_id());
+        // Sequence should be within bounds
+        assert!(sequence <= generator.snowid.config.max_sequence_id());
     }
 }

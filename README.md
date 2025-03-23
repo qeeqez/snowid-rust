@@ -7,6 +7,7 @@
 > A Rust implementation of a Snowflake-like ID generator with 42-bit timestamp.
 
 **Generate 64-bit unique identifiers that are:**
+
 - ⚡️ Fast (~244ns per ID)
 - 📈 Time-sorted
 - 🔄 Monotonic
@@ -19,11 +20,13 @@
 **Example ID**: 151819733950271234
 
 **Default configuration:**
+
 ```text
 |------------------------------------------|------------|------------|
 |           TIMESTAMP (42 bits)            | NODE (10)  |  SEQ (12)  |
 |------------------------------------------|------------|------------|
 ```
+
 - Timestamp: 42 bits = 139 years from 2024-01-01 (1704067200000)
 - Node ID: 10 bits = 1,024 nodes (valid range: 6-16 bits)
 - Sequence: 12 bits = 4,096 IDs/ms/node
@@ -45,6 +48,42 @@ fn main() {
 }
 ```
 
+## 🔠 Base62 Encoded IDs
+
+Generate base62 encoded IDs (using characters 0-9, a-z, A-Z) for more compact and URL-friendly identifiers:
+
+```rust
+use snowid::SnowIDBase62;
+
+fn main() {
+    // Create a base62 generator
+    let gen = SnowIDBase62::new(1).unwrap();
+
+    // Generate a base62 encoded ID
+    let encoded_id = gen.generate();
+    println!("Base62 ID: {}", encoded_id); // Example: "2qPfVQh7Jw9"
+
+    // Generate with raw value
+    let (encoded_id, raw_id) = gen.generate_with_raw();
+    println!("Base62: {}, Raw: {}", encoded_id, raw_id);
+
+    // Decode a base62 ID back to u64
+    let decoded = gen.decode(&encoded_id).unwrap();
+    assert_eq!(decoded, raw_id);
+
+    // Extract components from a base62 ID
+    let (timestamp, node, sequence) = gen.decompose(&encoded_id).unwrap();
+    println!("Timestamp: {}, Node: {}, Sequence: {}", timestamp, node, sequence);
+}
+```
+
+### Benefits of Base62 IDs
+
+- 🔤 More compact representation (11 chars max vs 20 digits for u64)
+- 🔗 URL-friendly (no special characters)
+- 👁️ Human-readable and easier to share
+- 🔄 Fully compatible with original SnowID structure
+
 ## 🔧 Configuration
 
 ```rust
@@ -63,6 +102,7 @@ fn main() {
 ```
 
 ### ℹ️ Available Methods
+
 ```rust
 use snowid::SnowID;
 
@@ -88,25 +128,37 @@ fn main() {
 
 ## 📊 Performance & Comparisons
 
+### Int64 vs Base62 Performance
+
+| Variant               | Time/ID | Size         | Notes                            |
+|-----------------------|---------|--------------|----------------------------------|
+| Int64                 | ~348 ns | 18-20 digits | Fastest option                   |
+| Base62                | ~403 ns | 10-11 chars  | ~16% slower, more compact        |
+| Int64 + manual Base62 | ~420 ns | 10-11 chars  | Separate generation and encoding |
+
+Base62 encoding provides more compact, URL-friendly IDs with a small performance trade-off.
+
 ### Social Media Platform Configurations
 
-| Platform | Timestamp | Node Bits | Sequence Bits | Max Nodes | IDs/ms/node | Time/ID |
-|----------|-----------|-----------|---------------|-----------|-------------|---------|
-| Twitter | 41 | 10 | 12 | 1,024 | 4,096 | ~242ns |
-| Instagram | 41 | 13 | 10 | 8,192 | 1,024 | ~1.94µs |
-| Discord | 42 | 10 | 12 | 1,024 | 4,096 | ~245ns |
+| Platform  | Timestamp | Node Bits | Sequence Bits | Max Nodes | IDs/ms/node | Time/ID |
+|-----------|-----------|-----------|---------------|-----------|-------------|---------|
+| Twitter   | 41        | 10        | 12            | 1,024     | 4,096       | ~242ns  |
+| Instagram | 41        | 13        | 10            | 8,192     | 1,024       | ~1.94µs |
+| Discord   | 42        | 10        | 12            | 1,024     | 4,096       | ~245ns  |
 
 ### Node vs Sequence Bits Trade-off
+
 | Node Bits | Max Nodes | IDs/ms/node | Time/ID |
 |-----------|-----------|-------------|---------|
-| 6 | 64 | 65,536 | ~20ns |
-| 8 | 256 | 16,384 | ~60ns |
-| 10 | 1,024 | 4,096 | ~243ns |
-| 12 | 4,096 | 1,024 | ~968ns |
-| 14 | 16,384 | 256 | ~3.86µs |
-| 16 | 65,536 | 64 | ~15.4µs |
+| 6         | 64        | 65,536      | ~20ns   |
+| 8         | 256       | 16,384      | ~60ns   |
+| 10        | 1,024     | 4,096       | ~243ns  |
+| 12        | 4,096     | 1,024       | ~968ns  |
+| 14        | 16,384    | 256         | ~3.86µs |
+| 16        | 65,536    | 64          | ~15.4µs |
 
 Choose configuration based on your needs:
+
 - More nodes → Increase node bits (max 16 bits = 65,536 nodes)
 - More IDs per node → Increase sequence bits (min 6 node bits = 64 nodes)
 - Total bits (node + sequence) is fixed at 22 bits
@@ -114,8 +166,11 @@ Choose configuration based on your needs:
 ## 🚀 Examples
 
 Check out [examples](examples/) for:
+
 - Basic usage
 - Custom configuration
+- Base62 encoding and decoding
+- Performance comparisons between Int64 and Base62
 - Distributed generation
 - Performance benchmarks
 

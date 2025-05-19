@@ -35,7 +35,7 @@ chrono = "0.4.41"
 base62 = "2.2.1"
 
 [dev-dependencies]
-criterion = { version = "0.5.1", features = ["html_reports"] }
+criterion = { version = "0.6.0", features = ["html_reports"] }
 rand = "0.9.1"
 
 [[bench]]

@@ -1,6 +1,6 @@
-use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
 use snowid::{SnowID, SnowIDConfig};
+use std::hint::black_box;
 
 pub fn node_bits_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("Node Bits Comparison");

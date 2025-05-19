@@ -40,7 +40,7 @@ mod tests {
         let snowid = generator.generate();
         let (timestamp, _, _) = generator.extract.decompose(snowid);
         assert!(timestamp > 0);
-        assert!(timestamp <= (1u64 << SnowID::TIMESTAMP_BITS) - 1);
+        assert!(timestamp < (1u64 << SnowID::TIMESTAMP_BITS));
 
         // Test node boundaries
         let (_, node, _) = generator.extract.decompose(snowid);

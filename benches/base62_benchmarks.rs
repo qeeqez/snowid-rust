@@ -1,6 +1,6 @@
-use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use snowid::{base62_decode, base62_encode, SnowID};
+use std::hint::black_box;
 
 // Common test values used across benchmarks
 const TEST_VALUES: [u64; 5] = [

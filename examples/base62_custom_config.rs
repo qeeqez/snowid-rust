@@ -27,14 +27,13 @@ fn main() {
     let timestamp: u64 = ts + generator.config.epoch();
     let datetime = DateTime::<Utc>::from_timestamp_millis(timestamp as i64).unwrap();
 
-    println!("\nGenerated Base62 ID: {}", encoded_id);
-    println!("Raw ID value: {}", raw_id);
+    println!("\nGenerated Base62 ID: {encoded_id}");
+    println!("Raw ID value: {raw_id}");
     println!("Components:");
-    println!("  Timestamp: {} ms since epoch", ts);
-    println!("  Human date: {}", datetime);
+    println!("  Timestamp: {ts} ms since epoch");
+    println!("  Human date: {datetime}");
     println!(
-        "  Node ID: {} (of {})",
-        node,
+        "  Node ID: {node} (of {})",
         generator.config.max_node_id()
     );
     println!(
@@ -48,7 +47,7 @@ fn main() {
     for _ in 0..3 {
         let (encoded_id, raw_id) = generator.generate_base62_with_raw();
         let (ts, node, seq) = generator.extract.decompose(raw_id);
-        println!("  Base62: {}, Raw: {}", encoded_id, raw_id);
-        println!("    → Timestamp: {}, Node: {}, Sequence: {}", ts, node, seq);
+        println!("  Base62: {encoded_id}, Raw: {raw_id}");
+        println!("    → Timestamp: {ts}, Node: {node}, Sequence: {seq}");
     }
 }

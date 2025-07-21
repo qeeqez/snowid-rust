@@ -65,7 +65,7 @@ mod tests {
         // Generate IDs as fast as possible
         for _ in 0..iterations {
             let id = generator.generate();
-            assert!(ids.insert(id), "Duplicate ID generated: {}", id);
+            assert!(ids.insert(id), "Duplicate ID generated: {id}");
         }
 
         // Verify expected number of unique IDs

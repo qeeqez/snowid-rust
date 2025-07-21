@@ -31,10 +31,7 @@ fn main() {
                     gen.extract.decompose(id)
                 };
 
-                println!(
-                    "Thread {} generated ID {} (ts={}, node={}, seq={})",
-                    thread_id, i, ts, node, seq
-                );
+                println!("Thread {thread_id} generated ID {i} (ts={ts}, node={node}, seq={seq})");
 
                 // Verify ID uniqueness
                 assert!(ids.insert(id), "Duplicate ID generated!");

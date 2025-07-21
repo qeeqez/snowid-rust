@@ -39,7 +39,7 @@ mod tests {
             node_id: 1024,
             max: 1023,
         };
-        assert!(format!("{:?}", invalid_node).contains("InvalidNodeId"));
+        assert!(format!("{invalid_node:?}").contains("InvalidNodeId"));
     }
 
     #[test]

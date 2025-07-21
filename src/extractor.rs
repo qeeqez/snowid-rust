@@ -41,6 +41,12 @@ mod tests {
     use super::*;
     use crate::SnowID;
 
+    fn create_snow_id(config: SnowIDConfig, timestamp: u64, node: u16, sequence: u16) -> u64 {
+        ((timestamp & config.timestamp_mask()) << config.timestamp_shift())
+            | ((node as u64 & config.node_mask() as u64) << config.node_shift())
+            | (sequence as u64 & config.sequence_mask() as u64)
+    }
+
     #[test]
     fn test_decompose() {
         let config = SnowIDConfig::default();
@@ -52,9 +58,7 @@ mod tests {
         let sequence: u16 = 123;
 
         // Create SnowID using the generator's internal method
-        let id = ((timestamp & config.timestamp_mask()) << config.timestamp_shift())
-            | ((node as u64 & config.node_mask() as u64) << config.node_shift())
-            | (sequence as u64 & config.sequence_mask() as u64);
+        let id = create_snow_id(config, timestamp, node, sequence);
 
         // Test individual component extraction
         assert_eq!(snowid_gen.extract.timestamp(id), timestamp);
@@ -79,9 +83,7 @@ mod tests {
         let max_sequence = config.max_sequence_id();
 
         // Create SnowID using maximum values
-        let id = ((max_timestamp & config.timestamp_mask()) << config.timestamp_shift())
-            | ((max_node_id as u64 & config.node_mask() as u64) << config.node_shift())
-            | (max_sequence as u64 & config.sequence_mask() as u64);
+        let id = create_snow_id(config, max_timestamp, max_node_id, max_sequence);
 
         assert_eq!(snowid_gen.extract.timestamp(id), max_timestamp);
         assert_eq!(snowid_gen.extract.node(id), max_node_id);

@@ -19,8 +19,8 @@ fn main() {
     let (encoded, raw_id) = generator.generate_base62_with_raw();
 
     println!("\nComponents of an ID (extracted individually):");
-    println!("  Base62 ID: {}", encoded);
-    println!("  Raw ID: {}", raw_id);
+    println!("  Base62 ID: {encoded}");
+    println!("  Raw ID: {raw_id}");
 
     // Decode and extract components
     let decoded = generator.decode_base62(&encoded).unwrap();
@@ -28,9 +28,9 @@ fn main() {
     let node = generator.extract.node(decoded);
     let seq = generator.extract.sequence(decoded);
 
-    println!("  Timestamp: {} ms since epoch", ts);
-    println!("  Node ID: {}", node);
-    println!("  Sequence: {}", seq);
+    println!("  Timestamp: {ts} ms since epoch");
+    println!("  Node ID: {node}");
+    println!("  Sequence: {seq}");
 }
 
 fn print_id(id: &str, generator: &mut SnowID) {
@@ -42,8 +42,5 @@ fn print_id(id: &str, generator: &mut SnowID) {
     let timestamp: u64 = since_epoch + generator.config.epoch();
     let datetime = DateTime::<Utc>::from_timestamp_millis(timestamp as i64).unwrap();
 
-    println!(
-        "  ID: {}, Raw: {}, Timestamp: {}, Human date: {}, Node ID: {}, Sequence: {}",
-        id, raw_id, timestamp, datetime, node, sequence
-    );
+    println!("  ID: {id}, Raw: {raw_id}, Timestamp: {timestamp}, Human date: {datetime}, Node ID: {node}, Sequence: {sequence}");
 }

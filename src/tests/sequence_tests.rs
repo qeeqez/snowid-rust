@@ -170,12 +170,7 @@ mod tests {
 
             // Check monotonicity
             if let Some(last) = last_id {
-                assert!(
-                    id > last,
-                    "ID {} is not greater than previous ID {}",
-                    id,
-                    last
-                );
+                assert!(id > last, "ID {id} is not greater than previous ID {last}");
             }
             last_id = Some(id);
 
@@ -194,8 +189,8 @@ mod tests {
         let ids_per_sec = NUM_IDS as f64 / elapsed.as_secs_f64();
 
         println!("\nResults:");
-        println!("Total time: {:?}", elapsed);
-        println!("IDs per second: {:.0}", ids_per_sec);
+        println!("Total time: {elapsed:?}");
+        println!("IDs per second: {ids_per_sec:.0}");
         println!("Unique IDs: {}/{}", ids.len(), NUM_IDS);
 
         // If we found any duplicates, print details and fail
@@ -203,10 +198,7 @@ mod tests {
             println!("\nFound {} duplicate IDs:", duplicates.len());
             for (i, id) in duplicates.iter().take(5) {
                 let (ts, node, seq) = generator.extract.decompose(*id);
-                println!(
-                    "Duplicate at position {}: ID {} (ts={}, node={}, seq={})",
-                    i, id, ts, node, seq
-                );
+                println!("Duplicate at position {i}: ID {id} (ts={ts}, node={node}, seq={seq})");
             }
             if duplicates.len() > 5 {
                 println!("... and {} more duplicates", duplicates.len() - 5);
@@ -225,8 +217,8 @@ mod tests {
         let unique_timestamps = timestamps.iter().collect::<HashSet<_>>().len();
 
         println!("\nTimestamp Analysis:");
-        println!("Time span: {}ms", total_time_span);
-        println!("Unique timestamps: {}", unique_timestamps);
+        println!("Time span: {total_time_span}ms");
+        println!("Unique timestamps: {unique_timestamps}");
         println!(
             "Average IDs per timestamp: {:.1}",
             NUM_IDS as f64 / unique_timestamps as f64

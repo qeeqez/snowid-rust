@@ -16,10 +16,7 @@ pub fn node_bits_comparison(c: &mut Criterion) {
         let max_sequence = 2u32.pow(sequence_bits as u32);
 
         group.bench_function(
-            format!(
-                "bits_{}_nodes_{}_seq_{}",
-                node_bits, max_nodes, max_sequence
-            ),
+            format!("bits_{node_bits}_nodes_{max_nodes}_seq_{max_sequence}"),
             |b| {
                 let generator = SnowID::with_config(1, config).unwrap();
                 b.iter(|| {
@@ -50,7 +47,7 @@ pub fn concurrent_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Concurrent");
 
     for &thread_count in &[2, 4, 8] {
-        group.bench_function(format!("threads/{}", thread_count), |b| {
+        group.bench_function(format!("threads/{thread_count}"), |b| {
             b.iter(|| {
                 let generator = std::sync::Arc::new(std::sync::Mutex::new(SnowID::new(1).unwrap()));
                 let mut handles = Vec::with_capacity(thread_count);

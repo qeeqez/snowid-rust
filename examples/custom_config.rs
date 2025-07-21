@@ -21,9 +21,9 @@ fn main() {
     let id = generator.generate();
     let (ts, node, seq) = generator.extract.decompose(id);
 
-    println!("\nGenerated ID: {}", id);
+    println!("\nGenerated ID: {id}");
     println!("Components:");
-    println!("  Timestamp: {} ms since epoch", ts);
+    println!("  Timestamp: {ts} ms since epoch");
     println!(
         "  Node ID: {} (of {})",
         node,

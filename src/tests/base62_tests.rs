@@ -10,7 +10,7 @@ mod tests {
         for &value in &test_values {
             let encoded = base62_encode(value);
             let decoded = base62_decode(&encoded).unwrap();
-            assert_eq!(decoded, value, "Failed roundtrip for {}", value);
+            assert_eq!(decoded, value, "Failed roundtrip for {value}");
         }
     }
 

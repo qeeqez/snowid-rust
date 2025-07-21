@@ -21,9 +21,9 @@ fn main() {
     let seq = generator.extract.sequence(id2);
     println!("\nComponents of ID3 (extracted individually):");
     println!("  Timestamp: {} ms since epoch", (id1 >> 12) & 0x3FF);
-    println!("  Timestamp: {} ms since epoch", ts);
-    println!("  Node ID: {}", node);
-    println!("  Sequence: {}", seq);
+    println!("  Timestamp: {ts} ms since epoch");
+    println!("  Node ID: {node}");
+    println!("  Sequence: {seq}");
 }
 
 fn print_id(id: u64, generator: &mut SnowID) {
@@ -31,8 +31,5 @@ fn print_id(id: u64, generator: &mut SnowID) {
     let timestamp: u64 = since_epoch + generator.config.epoch();
     let datetime = DateTime::<Utc>::from_timestamp_millis(timestamp as i64).unwrap();
 
-    println!(
-        "  ID: {}, Timestamp: {}, Human date: {}, Node ID: {}, Sequence: {}",
-        id, timestamp, datetime, node, sequence
-    );
+    println!("  ID: {id}, Timestamp: {timestamp}, Human date: {datetime}, Node ID: {node}, Sequence: {sequence}");
 }

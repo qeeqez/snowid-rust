@@ -9,7 +9,7 @@ fn main() {
     // Number of IDs to generate for each test
     let iterations = 100_000;
 
-    println!("Generating {} IDs for each variant...\n", iterations);
+    println!("Generating {iterations} IDs for each variant...\n");
 
     // Test int64 generation
     let start = Instant::now();
@@ -62,7 +62,7 @@ fn main() {
     let base62_ns = duration_to_ns(base62_duration) / iterations as f64;
     let percent_slower = ((base62_ns - int_ns) / int_ns) * 100.0;
 
-    println!("\nBase62 is {:.1}% slower than Int64", percent_slower);
+    println!("\nBase62 is {percent_slower:.1}% slower than Int64");
 
     // Print ID examples
     println!("\nID Examples:");

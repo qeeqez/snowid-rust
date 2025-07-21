@@ -9,9 +9,6 @@ updates:
     commit-message:
       prefix: "ci"
       include: "scope"
-    labels:
-      - "ci"
-      - "dependencies"
 
   # Rust dependencies
   - package-ecosystem: "cargo"
@@ -22,6 +19,3 @@ updates:
     commit-message:
       prefix: "build"
       include: "scope"
-    labels:
-      - "rust"
-      - "dependencies"

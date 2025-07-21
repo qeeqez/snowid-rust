@@ -32,10 +32,7 @@ fn main() {
     println!("Components:");
     println!("  Timestamp: {ts} ms since epoch");
     println!("  Human date: {datetime}");
-    println!(
-        "  Node ID: {node} (of {})",
-        generator.config.max_node_id()
-    );
+    println!("  Node ID: {node} (of {})", generator.config.max_node_id());
     println!(
         "  Sequence: {} (of {})",
         seq,

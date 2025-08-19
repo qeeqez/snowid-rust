@@ -1,4 +1,5 @@
 use crate::SnowID;
+use thiserror::Error;
 
 /// Default configuration values
 const DEFAULT_NODE_BITS: u8 = 10;
@@ -16,6 +17,14 @@ pub struct SnowIDConfig {
     sequence_mask: u16,
 }
 
+/// Errors related to `SnowIDConfig` builder validation
+#[derive(Debug, Clone, PartialEq, Error)]
+pub enum SnowIDConfigError {
+    /// Provided node bits are out of the supported range [6, 16]
+    #[error("Node bits {bits} must be between 6 and 16")]
+    InvalidNodeBits { bits: u8 },
+}
+
 impl SnowIDConfig {
     /// Create new SnowIDConfig with given node bits
     fn new(node_bits: u8, custom_epoch: u64) -> Self {
@@ -25,7 +34,7 @@ impl SnowIDConfig {
             custom_epoch,
             timestamp_shift: SnowID::TOTAL_NODE_AND_SEQUENCE_BITS,
             node_shift: sequence_bits,
-            timestamp_mask: (1 << SnowID::TIMESTAMP_BITS) - 1,
+            timestamp_mask: (1u64 << SnowID::TIMESTAMP_BITS) - 1,
             node_mask: ((1u32 << node_bits) - 1) as u16,
             sequence_mask: ((1u32 << sequence_bits) - 1) as u16,
         }
@@ -140,6 +149,17 @@ impl SnowIDConfigBuilder {
         self
     }
 
+    /// Fallible variant of `node_bits` that returns an error instead of panicking.
+    ///
+    /// Prefer this in library consumers to avoid panics.
+    pub fn try_node_bits(mut self, bits: u8) -> Result<Self, SnowIDConfigError> {
+        if !(6..=16).contains(&bits) {
+            return Err(SnowIDConfigError::InvalidNodeBits { bits });
+        }
+        self.node_bits = bits;
+        Ok(self)
+    }
+
     /// Set a custom epoch timestamp in milliseconds
     ///
     /// # Arguments
@@ -186,6 +206,18 @@ mod tests {
                 );
                 assert_eq!(config.max_node_id(), ((1u32 << bits) - 1) as u16);
             }
+        }
+
+        #[test]
+        fn test_try_node_bits_ok() {
+            let cfg = SnowIDConfig::builder().try_node_bits(12).unwrap().build();
+            assert_eq!(cfg.node_bits(), 12);
+        }
+
+        #[test]
+        fn test_try_node_bits_err() {
+            let err = SnowIDConfig::builder().try_node_bits(5).unwrap_err();
+            assert_eq!(err, SnowIDConfigError::InvalidNodeBits { bits: 5 });
         }
 
         #[test]

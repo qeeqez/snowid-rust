@@ -167,8 +167,8 @@ Choose configuration based on your needs:
 
 | Variant               | Time/ID | Size         | Notes                    |
 |-----------------------|---------|--------------|--------------------------|
-| Int64                 | ~325 ns | 18-20 digits | Fastest option           |
-| Base62                | ~350 ns | 10-11 chars  | ~8% slower, more compact |
+| Int64                 | ~290 ns | 18-20 digits | Fastest option           |
+| Base62                | ~295 ns | 10-11 chars  | ~2% slower, more compact |
 
 Base62 encoding provides more compact, URL-friendly IDs with a small performance trade-off.
 

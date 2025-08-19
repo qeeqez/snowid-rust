@@ -93,4 +93,39 @@ mod tests {
             thread::sleep(Duration::from_millis(1));
         }
     }
+
+    #[test]
+    fn test_concurrent_generation_lockfree() {
+        let generator = Arc::new(SnowID::new(7).unwrap());
+        let num_threads = 8;
+        let ids_per_thread = 500;
+        let mut handles = Vec::with_capacity(num_threads);
+
+        for _ in 0..num_threads {
+            let gen = Arc::clone(&generator);
+            handles.push(thread::spawn(move || {
+                let mut v = Vec::with_capacity(ids_per_thread);
+                for _ in 0..ids_per_thread {
+                    v.push(gen.generate());
+                }
+                v
+            }));
+        }
+
+        let mut all_ids = Vec::with_capacity(num_threads * ids_per_thread);
+        for h in handles {
+            let mut ids = h.join().expect("thread panicked");
+            all_ids.append(&mut ids);
+        }
+
+        // Uniqueness
+        let set: HashSet<_> = all_ids.iter().cloned().collect();
+        assert_eq!(set.len(), all_ids.len());
+
+        // Global monotonicity when sorted
+        all_ids.sort_unstable();
+        for i in 1..all_ids.len() {
+            assert!(all_ids[i] > all_ids[i - 1]);
+        }
+    }
 }

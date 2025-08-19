@@ -13,7 +13,7 @@
 - 🔄 Monotonic
 - 🔒 Thread-safe
 - 🌐 Distributed-ready
-- 🎯 Zero dependencies
+- 🎯 Small dependency footprint (`thiserror`, `base62` for encoding)
 
 ## 🧮 ID Structure
 

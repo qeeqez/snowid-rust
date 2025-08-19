@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
@@ -18,7 +20,8 @@ pub fn base62_encode(id: u64) -> String {
     // Maximum size needed for u64 in base62 is 11 bytes
     let mut buf = [0u8; 11];
     let len = base62::encode_bytes(id, &mut buf).unwrap();
-    String::from_utf8_lossy(&buf[..len]).into_owned()
+    // base62 output is always valid ASCII
+    std::str::from_utf8(&buf[..len]).unwrap().to_owned()
 }
 
 // Decode a base62 string to a u64, handling potential overflow
@@ -118,48 +121,71 @@ impl SnowID {
     /// * `u64` - New SnowID value
     #[inline]
     pub fn generate(&self) -> u64 {
-        let mut timestamp = self.get_time_since_epoch();
-        let mut last_ts = self.last_timestamp.load(Ordering::Acquire);
-        let mut backoff = 1;
+        let mut backoff_ms = 1u64;
 
         loop {
-            if timestamp > last_ts {
-                // Try to update last_timestamp atomically
+            // Read current time and last seen timestamp
+            let now = self.get_time_since_epoch();
+            let last_ts = self.last_timestamp.load(Ordering::Acquire);
+
+            // Clamp to last seen to ensure monotonic timestamp under clock regression
+            let ts = now.max(last_ts);
+
+            if ts > last_ts {
+                // Try to move the generator to the new millisecond
+                match self
+                    .last_timestamp
+                    .compare_exchange(last_ts, ts, Ordering::AcqRel, Ordering::Acquire)
+                {
+                    Ok(_) => {
+                        // New millisecond: start sequence at 0
+                        self.sequence.store(0, Ordering::Release);
+                        return self.create_snowid(ts, 0);
+                    }
+                    Err(_actual) => {
+                        // Someone else advanced the timestamp; retry
+                        // fall-through to same-ts handling below on next loop iteration
+                        continue;
+                    }
+                }
+            }
+
+            // Same millisecond: increment sequence atomically and use the returned slot
+            let seq_prev = self.sequence.fetch_add(1, Ordering::AcqRel);
+            if seq_prev < self.config.max_sequence_id() {
+                let seq_to_use = seq_prev + 1;
+                return self.create_snowid(ts, seq_to_use);
+            }
+
+            // Sequence exhausted: wait for the next millisecond with exponential backoff
+            let wait_from = ts;
+            let next_ts = self.wait_next_millis(wait_from, backoff_ms);
+            backoff_ms = (backoff_ms.saturating_mul(2)).min(Self::MAX_BACKOFF_MS);
+
+            // Try to publish the advanced timestamp and reset sequence
+            loop {
+                let current_last = self.last_timestamp.load(Ordering::Acquire);
+                if next_ts <= current_last {
+                    // Another thread already advanced; restart outer loop
+                    break;
+                }
                 match self.last_timestamp.compare_exchange(
-                    last_ts,
-                    timestamp,
+                    current_last,
+                    next_ts,
                     Ordering::AcqRel,
                     Ordering::Acquire,
                 ) {
                     Ok(_) => {
                         self.sequence.store(0, Ordering::Release);
-                        break;
+                        return self.create_snowid(next_ts, 0);
                     }
-                    Err(actual) => {
-                        last_ts = actual;
+                    Err(_) => {
+                        // Lost the race; retry inner publish or restart
                         continue;
                     }
                 }
-            } else {
-                // For same timestamp or backwards clock
-                let current_sequence = self.sequence.fetch_add(1, Ordering::AcqRel);
-
-                if current_sequence < self.config.max_sequence_id() {
-                    // We got a valid sequence number
-                    break;
-                }
-
-                // Sequence exhausted, wait for next millisecond with exponential backoff
-                let wait_from = timestamp.max(last_ts);
-                timestamp = self.wait_next_millis(wait_from, backoff);
-                backoff = (backoff * 2).min(Self::MAX_BACKOFF_MS);
-
-                // Update last_ts for next iteration
-                last_ts = self.last_timestamp.load(Ordering::Acquire);
             }
         }
-
-        self.create_snowid(timestamp, self.sequence.load(Ordering::Acquire))
     }
 
     /// Get current time in milliseconds since epoch
@@ -173,21 +199,15 @@ impl SnowID {
         millis.saturating_sub(self.config.epoch())
     }
 
-    /// Wait until next millisecond with exponential backoff
-    fn wait_next_millis(&self, timestamp: u64, backoff_ms: u64) -> u64 {
-        // Sleep for a short time
-        thread::sleep(Duration::from_millis(backoff_ms));
-
-        // Get new timestamp
-        let new_ts = self.get_time_since_epoch();
-        if new_ts <= timestamp {
-            // If still not advanced, recurse with exponential backoff
-            self.wait_next_millis(
-                timestamp,
-                backoff_ms.saturating_mul(2).min(Self::MAX_BACKOFF_MS),
-            )
-        } else {
-            new_ts
+    /// Wait until next millisecond with exponential backoff (iterative)
+    fn wait_next_millis(&self, from_timestamp: u64, mut backoff_ms: u64) -> u64 {
+        loop {
+            thread::sleep(Duration::from_millis(backoff_ms));
+            let new_ts = self.get_time_since_epoch();
+            if new_ts > from_timestamp {
+                return new_ts;
+            }
+            backoff_ms = (backoff_ms.saturating_mul(2)).min(Self::MAX_BACKOFF_MS);
         }
     }
 

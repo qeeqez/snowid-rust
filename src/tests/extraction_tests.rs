@@ -24,7 +24,7 @@ mod tests {
 
     #[test]
     fn test_custom_configuration() {
-        let config = SnowIDConfig::builder().node_bits(12).build();
+        let config = SnowIDConfig::builder().node_bits(12).unwrap().build();
 
         let generator = SnowID::with_config(1023, config).unwrap();
 

@@ -8,7 +8,7 @@ pub fn node_bits_comparison(c: &mut Criterion) {
     // Test different node bit lengths
     // This affects the balance between max nodes (2^node_bits) and sequences per ms (2^sequence_bits)
     for &node_bits in &[6, 8, 10, 12, 14, 16] {
-        let config = SnowIDConfig::builder().node_bits(node_bits).build();
+        let config = SnowIDConfig::builder().node_bits(node_bits).unwrap().build();
 
         // Calculate theoretical limits for documentation
         let max_nodes = 2u32.pow(node_bits as u32);
@@ -31,7 +31,7 @@ pub fn node_bits_comparison(c: &mut Criterion) {
 
 pub fn overflow_stress_single_thread(c: &mut Criterion) {
     // Reduce sequence capacity per ms to 64 by using node_bits=16
-    let cfg = SnowIDConfig::builder().node_bits(16).build();
+    let cfg = SnowIDConfig::builder().node_bits(16).unwrap().build();
     let generator = SnowID::with_config(1, cfg).unwrap();
 
     let mut group = c.benchmark_group("Overflow SingleThread");
@@ -56,7 +56,7 @@ pub fn overflow_stress_single_thread(c: &mut Criterion) {
 
 pub fn overflow_stress_concurrent_lockfree(c: &mut Criterion) {
     // node_bits=16 -> sequence capacity 64 per ms, easier to hit overflow
-    let cfg = SnowIDConfig::builder().node_bits(16).build();
+    let cfg = SnowIDConfig::builder().node_bits(16).unwrap().build();
     let mut group = c.benchmark_group("Overflow Concurrent");
 
     for &threads in &[2usize, 4, 8] {

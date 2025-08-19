@@ -1,10 +1,11 @@
 use snowid::{SnowID, SnowIDConfig};
 
 fn main() {
-    // Create a custom configuration for many nodes (12 bits = 4096 nodes)
+    // Create a custom configuration for many nodes (16 bits = 65,536 nodes)
     let config = SnowIDConfig::builder()
         .epoch(1577836800000)
-        .node_bits(16) // 12 bits for node ID = 4096 nodes
+        .node_bits(16) // 16 bits for node ID = 65,536 nodes
+        .unwrap()
         .build();
 
     // Create generator with node ID 42

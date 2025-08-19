@@ -4,6 +4,9 @@ use thiserror::Error;
 /// Default configuration values
 const DEFAULT_NODE_BITS: u8 = 10;
 const DEFAULT_CUSTOM_EPOCH: u64 = 1704067200000; // January 1, 2024 UTC
+const DEFAULT_SPIN_ENABLED: bool = true;
+const DEFAULT_SPIN_LOOPS: u32 = 64;
+const DEFAULT_SPIN_YIELD_EVERY: u32 = 16;
 
 /// Configuration for SnowID generator
 #[derive(Debug, Clone, Copy)]
@@ -15,6 +18,10 @@ pub struct SnowIDConfig {
     timestamp_mask: u64,
     node_mask: u16,
     sequence_mask: u16,
+    // Throughput tuning
+    spin_enabled: bool,
+    spin_loops: u32,
+    spin_yield_every: u32,
 }
 
 /// Errors related to `SnowIDConfig` builder validation
@@ -37,6 +44,9 @@ impl SnowIDConfig {
             timestamp_mask: (1u64 << SnowID::TIMESTAMP_BITS) - 1,
             node_mask: ((1u32 << node_bits) - 1) as u16,
             sequence_mask: ((1u32 << sequence_bits) - 1) as u16,
+            spin_enabled: DEFAULT_SPIN_ENABLED,
+            spin_loops: DEFAULT_SPIN_LOOPS,
+            spin_yield_every: DEFAULT_SPIN_YIELD_EVERY,
         }
     }
 
@@ -73,6 +83,24 @@ impl SnowIDConfig {
     #[inline]
     pub fn max_sequence_id(&self) -> u16 {
         self.sequence_mask
+    }
+
+    /// Whether micro spin is enabled before sleeping on overflow
+    #[inline]
+    pub fn spin_enabled(&self) -> bool {
+        self.spin_enabled
+    }
+
+    /// Number of spin loops to attempt before sleeping
+    #[inline]
+    pub fn spin_loops(&self) -> u32 {
+        self.spin_loops
+    }
+
+    /// Yield frequency during spin: yield every N iterations; 0 disables yielding
+    #[inline]
+    pub fn spin_yield_every(&self) -> u32 {
+        self.spin_yield_every
     }
 
     // Internal methods used by SnowID and SnowIDExtractor
@@ -113,6 +141,9 @@ impl Default for SnowIDConfig {
 pub struct SnowIDConfigBuilder {
     node_bits: u8,
     custom_epoch: u64,
+    spin_enabled: bool,
+    spin_loops: u32,
+    spin_yield_every: u32,
 }
 
 impl SnowIDConfigBuilder {
@@ -121,38 +152,21 @@ impl SnowIDConfigBuilder {
         Self {
             node_bits: DEFAULT_NODE_BITS,
             custom_epoch: DEFAULT_CUSTOM_EPOCH,
+            spin_enabled: DEFAULT_SPIN_ENABLED,
+            spin_loops: DEFAULT_SPIN_LOOPS,
+            spin_yield_every: DEFAULT_SPIN_YIELD_EVERY,
         }
     }
 
-    /// Set the number of bits for node ID (6-16)
+    /// Set the number of bits for node ID (6-16) in a fallible way.
     /// Sequence bits will be automatically set to (22 - node_bits)
     ///
     /// # Arguments
     /// * `bits` - Number of bits for node ID (6-16)
     ///
     /// # Returns
-    /// * `Self` - Builder instance for chaining
-    ///
-    /// # Panics
-    /// Panics if bits is not between 6 and 16 (inclusive)
-    ///
-    /// # Note
-    /// The range is limited to 6-16 bits due to u16 constraints:
-    /// - Minimum 6 bits = 64 nodes (reasonable minimum for distributed systems)
-    /// - Maximum 16 bits = 65,536 nodes (u16 max value)
-    pub fn node_bits(mut self, bits: u8) -> Self {
-        assert!(
-            (6..=16).contains(&bits),
-            "Node bits must be between 6 and 16"
-        );
-        self.node_bits = bits;
-        self
-    }
-
-    /// Fallible variant of `node_bits` that returns an error instead of panicking.
-    ///
-    /// Prefer this in library consumers to avoid panics.
-    pub fn try_node_bits(mut self, bits: u8) -> Result<Self, SnowIDConfigError> {
+    /// * `Result<Self, SnowIDConfigError>` - Builder instance or validation error
+    pub fn node_bits(mut self, bits: u8) -> Result<Self, SnowIDConfigError> {
         if !(6..=16).contains(&bits) {
             return Err(SnowIDConfigError::InvalidNodeBits { bits });
         }
@@ -172,12 +186,35 @@ impl SnowIDConfigBuilder {
         self
     }
 
+    /// Enable or disable micro spin before sleep on overflow
+    pub fn enable_spin(mut self, enable: bool) -> Self {
+        self.spin_enabled = enable;
+        self
+    }
+
+    /// Set number of spin loops attempted before falling back to sleep
+    /// A value of 0 disables spinning.
+    pub fn spin_loops(mut self, loops: u32) -> Self {
+        self.spin_loops = loops;
+        self
+    }
+
+    /// Set spin yield cadence. Yield every N spin iterations; 0 disables yielding.
+    pub fn spin_yield_every(mut self, n: u32) -> Self {
+        self.spin_yield_every = n;
+        self
+    }
+
     /// Build the final SnowIDConfig
     ///
     /// # Returns
     /// * `SnowIDConfig` - The configured SnowIDConfig instance
     pub fn build(self) -> SnowIDConfig {
-        SnowIDConfig::new(self.node_bits, self.custom_epoch)
+        let mut cfg = SnowIDConfig::new(self.node_bits, self.custom_epoch);
+        cfg.spin_enabled = self.spin_enabled;
+        cfg.spin_loops = self.spin_loops;
+        cfg.spin_yield_every = self.spin_yield_every;
+        cfg
     }
 }
 
@@ -198,7 +235,7 @@ mod tests {
         fn test_valid_node_bits() {
             // Test all valid node bits from 6 to 16
             for bits in 6..=16 {
-                let config = SnowIDConfig::builder().node_bits(bits).build();
+                let config = SnowIDConfig::builder().node_bits(bits).unwrap().build();
                 assert_eq!(config.node_bits(), bits);
                 assert_eq!(
                     config.sequence_bits(),
@@ -209,40 +246,22 @@ mod tests {
         }
 
         #[test]
-        fn test_try_node_bits_ok() {
-            let cfg = SnowIDConfig::builder().try_node_bits(12).unwrap().build();
+        fn test_node_bits_ok() {
+            let cfg = SnowIDConfig::builder().node_bits(12).unwrap().build();
             assert_eq!(cfg.node_bits(), 12);
         }
 
         #[test]
-        fn test_try_node_bits_err() {
-            let err = SnowIDConfig::builder().try_node_bits(5).unwrap_err();
+        fn test_node_bits_err() {
+            let err = SnowIDConfig::builder().node_bits(5).unwrap_err();
             assert_eq!(err, SnowIDConfigError::InvalidNodeBits { bits: 5 });
-        }
-
-        #[test]
-        #[should_panic(expected = "Node bits must be between 6 and 16")]
-        fn test_too_few_node_bits() {
-            SnowIDConfig::builder().node_bits(5).build();
-        }
-
-        #[test]
-        #[should_panic(expected = "Node bits must be between 6 and 16")]
-        fn test_too_many_node_bits() {
-            SnowIDConfig::builder().node_bits(17).build();
-        }
-
-        #[test]
-        #[should_panic(expected = "Node bits must be between 6 and 16")]
-        fn test_max_u8_node_bits() {
-            SnowIDConfig::builder().node_bits(u8::MAX).build();
         }
     }
 
     #[test]
     fn test_custom_config() {
         let config = SnowIDConfig::builder()
-            .node_bits(12)
+            .node_bits(12).unwrap()
             .epoch(1640995200000) // 2022-01-01
             .build();
 
@@ -260,13 +279,12 @@ mod tests {
             SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - DEFAULT_NODE_BITS
         );
         assert_eq!(config.epoch(), DEFAULT_CUSTOM_EPOCH);
+        assert_eq!(config.spin_enabled(), DEFAULT_SPIN_ENABLED);
+        assert_eq!(config.spin_loops(), DEFAULT_SPIN_LOOPS);
+        assert_eq!(config.spin_yield_every(), DEFAULT_SPIN_YIELD_EVERY);
     }
 
-    #[test]
-    #[should_panic(expected = "Node bits must be between 6 and 16")]
-    fn test_invalid_node_bits() {
-        SnowIDConfig::builder().node_bits(21).build();
-    }
+    // Panicking builder has been removed; validation is error-based.
 
     #[test]
     fn test_bit_config() {
@@ -278,5 +296,26 @@ mod tests {
         assert_eq!(config.timestamp_mask(), (1u64 << 42) - 1);
         assert_eq!(config.max_sequence_id(), 0xFFF);
         assert_eq!(config.max_node_id(), 0x3FF);
+    }
+
+    #[test]
+    fn test_spin_tuning_builder() {
+        let cfg = SnowIDConfig::builder()
+            .enable_spin(false)
+            .spin_loops(0)
+            .spin_yield_every(0)
+            .build();
+        assert!(!cfg.spin_enabled());
+        assert_eq!(cfg.spin_loops(), 0);
+        assert_eq!(cfg.spin_yield_every(), 0);
+
+        let cfg2 = SnowIDConfig::builder()
+            .enable_spin(true)
+            .spin_loops(128)
+            .spin_yield_every(8)
+            .build();
+        assert!(cfg2.spin_enabled());
+        assert_eq!(cfg2.spin_loops(), 128);
+        assert_eq!(cfg2.spin_yield_every(), 8);
     }
 }

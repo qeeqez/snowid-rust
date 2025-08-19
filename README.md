@@ -93,7 +93,7 @@ fn main() {
     // Create custom configuration
     let config = SnowIDConfig::builder()
         .epoch(1577836800000) // 2020-01-01 00:00:00 UTC
-        .node_bits(8)         // Supports 255 nodes
+        .node_bits(8).unwrap()         // Supports 255 nodes
         .build();
 
     // Create generator with custom config
@@ -135,6 +135,30 @@ fn main() {
     let timestamp_bits = SnowID::TIMESTAMP_BITS; // Get number of bits used for timestamp (42)
 }
 ```
+
+### ⏳ Tuning Overflow Wait (Spin/Yield)
+
+When the per-millisecond sequence is exhausted, SnowID waits for the next millisecond. You can tune the short busy-wait (spin) before sleeping:
+
+```rust
+use snowid::{SnowID, SnowIDConfig};
+
+fn main() {
+    let config = SnowIDConfig::builder()
+        .node_bits(10).unwrap()
+        .enable_spin(true)   // default: true
+        .spin_loops(64)      // default: 64 spin iterations before sleeping
+        .spin_yield_every(16) // default: yield every 16 iterations (0 disables yielding)
+        .build();
+
+    let gen = SnowID::with_config(1, config).unwrap();
+}
+```
+
+Notes:
+
+- Set `enable_spin(false)` or `spin_loops(0)` to disable spinning entirely.
+- Lower `spin_loops` can reduce CPU usage; higher values may reduce tail latency under overflow.
 
 ## 📊 Performance & Comparisons
 

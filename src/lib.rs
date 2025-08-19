@@ -24,19 +24,6 @@ pub fn base62_encode(id: u64) -> String {
     std::str::from_utf8(&buf[..len]).unwrap().to_owned()
 }
 
-#[cfg(test)]
-mod timing_tests {
-    use super::*;
-
-    #[test]
-    fn test_wait_next_millis_progresses() {
-        let gen = SnowID::new(1).unwrap();
-        let from = gen.get_time_since_epoch();
-        let next = gen.wait_next_millis(from, 1);
-        assert!(next > from);
-    }
-}
-
 // Decode a base62 string to a u64, handling potential overflow
 pub fn base62_decode(encoded: &str) -> Result<u64, Base62DecodeError> {
     let decoded = base62::decode(encoded).map_err(Base62DecodeError::from)?;
@@ -85,8 +72,6 @@ impl SnowID {
     pub const TIMESTAMP_BITS: u32 = 42;
     pub const TOTAL_NODE_AND_SEQUENCE_BITS: u8 = 22;
     const MAX_BACKOFF_MS: u64 = 100;
-    const SPIN_LOOPS: u32 = 64;
-    const SPIN_YIELD_EVERY: u32 = 16;
 
     /// Create a new SnowID generator with default configuration
     ///
@@ -214,19 +199,23 @@ impl SnowID {
         millis.saturating_sub(self.config.epoch())
     }
 
-    /// Wait until next millisecond with a micro spin/yield before sleeping.
+    /// Wait until next millisecond with an optional micro spin/yield before sleeping.
     /// The spin reduces latency around the millisecond boundary when sequence overflows.
     fn wait_next_millis(&self, from_timestamp: u64, mut backoff_ms: u64) -> u64 {
         loop {
             // Micro spin/yield to quickly catch the boundary without oversleeping
-            for i in 0..Self::SPIN_LOOPS {
-                let new_ts = self.get_time_since_epoch();
-                if new_ts > from_timestamp {
-                    return new_ts;
-                }
-                std::hint::spin_loop();
-                if i % Self::SPIN_YIELD_EVERY == Self::SPIN_YIELD_EVERY - 1 {
-                    thread::yield_now();
+            let cfg = self.config; // Copy config (Copy)
+            if cfg.spin_enabled() && cfg.spin_loops() > 0 {
+                let yield_every = cfg.spin_yield_every();
+                for i in 0..cfg.spin_loops() {
+                    let new_ts = self.get_time_since_epoch();
+                    if new_ts > from_timestamp {
+                        return new_ts;
+                    }
+                    std::hint::spin_loop();
+                    if yield_every != 0 && i % yield_every == yield_every - 1 {
+                        thread::yield_now();
+                    }
                 }
             }
 

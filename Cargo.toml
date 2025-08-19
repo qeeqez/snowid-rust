@@ -31,12 +31,12 @@ debug = true
 
 [dependencies]
 thiserror = "2.0.15"
-chrono = "0.4.41"
 base62 = "2.2.1"
 
 [dev-dependencies]
 criterion = { version = "0.7.0", features = ["html_reports"] }
 rand = "0.9.2"
+chrono = "0.4.41"
 
 [[bench]]
 name = "snowid_benchmarks"

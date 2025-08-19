@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 mod config;
 mod error;
 mod extractor;
+#[cfg(test)]
 pub mod tests;
 
 pub use config::SnowIDConfig;

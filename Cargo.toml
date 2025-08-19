@@ -6,7 +6,7 @@ version = "0.1.7"
 edition = "2021"
 rust-version = "1.85.1"
 
-authors = ["Maksim Sasnouski <qeeqez@gmail.com>"]
+authors = ["Maksim Sasnouski <maksim@rixl.com>"]
 description = "A Rust library for generating SnowID - a Snowflake-like timestamp-based distributed unique identifier"
 
 license = "MIT"

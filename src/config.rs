@@ -261,7 +261,8 @@ mod tests {
     #[test]
     fn test_custom_config() {
         let config = SnowIDConfig::builder()
-            .node_bits(12).unwrap()
+            .node_bits(12)
+            .unwrap()
             .epoch(1640995200000) // 2022-01-01
             .build();
 

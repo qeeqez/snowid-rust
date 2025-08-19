@@ -8,7 +8,10 @@ pub fn node_bits_comparison(c: &mut Criterion) {
     // Test different node bit lengths
     // This affects the balance between max nodes (2^node_bits) and sequences per ms (2^sequence_bits)
     for &node_bits in &[6, 8, 10, 12, 14, 16] {
-        let config = SnowIDConfig::builder().node_bits(node_bits).unwrap().build();
+        let config = SnowIDConfig::builder()
+            .node_bits(node_bits)
+            .unwrap()
+            .build();
 
         // Calculate theoretical limits for documentation
         let max_nodes = 2u32.pow(node_bits as u32);

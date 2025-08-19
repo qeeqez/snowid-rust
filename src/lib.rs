@@ -133,10 +133,12 @@ impl SnowID {
 
             if ts > last_ts {
                 // Try to move the generator to the new millisecond
-                match self
-                    .last_timestamp
-                    .compare_exchange(last_ts, ts, Ordering::AcqRel, Ordering::Acquire)
-                {
+                match self.last_timestamp.compare_exchange(
+                    last_ts,
+                    ts,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
                     Ok(_) => {
                         // New millisecond: start sequence at 0
                         self.sequence.store(0, Ordering::Release);

@@ -31,7 +31,7 @@ debug = true
 
 [dependencies]
 thiserror = "2.0.15"
-base62 = "2.2.1"
+base62 = "2.2.2"
 
 [dev-dependencies]
 criterion = { version = "0.7.0", features = ["html_reports"] }

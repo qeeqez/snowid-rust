@@ -13,26 +13,31 @@ impl SnowIDExtractor {
     }
 
     /// Extract timestamp component from a SnowID
-    #[inline]
+    #[inline(always)]
     pub fn timestamp(&self, id: u64) -> u64 {
         (id >> self.config.timestamp_shift()) & self.config.timestamp_mask()
     }
 
     /// Extract node component from a SnowID
-    #[inline]
+    #[inline(always)]
     pub fn node(&self, id: u64) -> u16 {
         ((id >> self.config.node_shift()) & self.config.node_mask() as u64) as u16
     }
 
     /// Extract sequence component from a SnowID
-    #[inline]
+    #[inline(always)]
     pub fn sequence(&self, id: u64) -> u16 {
         (id & self.config.sequence_mask() as u64) as u16
     }
 
     /// Decompose SnowID into its components: timestamp, node ID, and sequence
+    /// Optimized to extract all components in a single pass
+    #[inline]
     pub fn decompose(&self, id: u64) -> (u64, u16, u16) {
-        (self.timestamp(id), self.node(id), self.sequence(id))
+        let timestamp = (id >> self.config.timestamp_shift()) & self.config.timestamp_mask();
+        let node = ((id >> self.config.node_shift()) & self.config.node_mask() as u64) as u16;
+        let sequence = (id & self.config.sequence_mask() as u64) as u16;
+        (timestamp, node, sequence)
     }
 }
 

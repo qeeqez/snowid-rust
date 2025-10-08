@@ -9,7 +9,9 @@ const DEFAULT_SPIN_LOOPS: u32 = 64;
 const DEFAULT_SPIN_YIELD_EVERY: u32 = 16;
 
 /// Configuration for SnowID generator
+/// Copy-optimized with const-evaluable fields
 #[derive(Debug, Clone, Copy)]
+#[repr(C)]
 pub struct SnowIDConfig {
     node_bits: u8,
     custom_epoch: u64,
@@ -62,76 +64,76 @@ impl SnowIDConfig {
     }
 
     /// Get epoch timestamp
-    #[inline]
-    pub fn epoch(&self) -> u64 {
+    #[inline(always)]
+    pub const fn epoch(&self) -> u64 {
         self.custom_epoch
     }
 
     /// Get node bits configuration
-    #[inline]
-    pub fn node_bits(&self) -> u8 {
+    #[inline(always)]
+    pub const fn node_bits(&self) -> u8 {
         self.node_bits
     }
 
     /// Get sequence bits derived from node bits
-    #[inline]
-    pub fn sequence_bits(&self) -> u8 {
+    #[inline(always)]
+    pub const fn sequence_bits(&self) -> u8 {
         SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - self.node_bits
     }
 
     /// Get the maximum node ID supported by the current configuration
-    #[inline]
-    pub fn max_node_id(&self) -> u16 {
+    #[inline(always)]
+    pub const fn max_node_id(&self) -> u16 {
         self.node_mask
     }
 
     /// Get the maximum sequence number supported by the current configuration
-    #[inline]
-    pub fn max_sequence_id(&self) -> u16 {
+    #[inline(always)]
+    pub const fn max_sequence_id(&self) -> u16 {
         self.sequence_mask
     }
 
     /// Whether micro spin is enabled before sleeping on overflow
-    #[inline]
-    pub fn spin_enabled(&self) -> bool {
+    #[inline(always)]
+    pub const fn spin_enabled(&self) -> bool {
         self.spin_enabled
     }
 
     /// Number of spin loops to attempt before sleeping
-    #[inline]
-    pub fn spin_loops(&self) -> u32 {
+    #[inline(always)]
+    pub const fn spin_loops(&self) -> u32 {
         self.spin_loops
     }
 
     /// Yield frequency during spin: yield every N iterations; 0 disables yielding
-    #[inline]
-    pub fn spin_yield_every(&self) -> u32 {
+    #[inline(always)]
+    pub const fn spin_yield_every(&self) -> u32 {
         self.spin_yield_every
     }
 
     // Internal methods used by SnowID and SnowIDExtractor
-    #[inline]
-    pub(crate) fn timestamp_shift(&self) -> u8 {
+    #[inline(always)]
+    pub(crate) const fn timestamp_shift(&self) -> u8 {
         self.timestamp_shift
     }
 
-    #[inline]
-    pub(crate) fn node_shift(&self) -> u8 {
+    #[inline(always)]
+    pub(crate) const fn node_shift(&self) -> u8 {
         self.node_shift
     }
 
-    #[inline]
-    pub(crate) fn timestamp_mask(&self) -> u64 {
+    #[inline(always)]
+    pub(crate) const fn timestamp_mask(&self) -> u64 {
         self.timestamp_mask
     }
 
-    #[inline]
-    pub(crate) fn node_mask(&self) -> u16 {
+    #[inline(always)]
+    pub(crate) const fn node_mask(&self) -> u16 {
         self.node_mask
     }
 
-    #[inline]
-    pub(crate) fn sequence_mask(&self) -> u16 {
+    #[inline(always)]
+    pub(crate) const fn sequence_mask(&self) -> u16 {
         self.sequence_mask
     }
 }

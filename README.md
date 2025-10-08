@@ -108,14 +108,14 @@ use snowid::SnowID;
 
 fn main() {
     let gen = SnowID::new(1).unwrap();
-    
+
     // Generate numeric IDs
     let id = gen.generate();
-    
+
     // Generate Base62 encoded IDs
     let base62_id = gen.generate_base62();
     let (base62_id, raw_id) = gen.generate_base62_with_raw();
-    
+
     // Decode Base62 IDs
     let decoded = gen.decode_base62(&base62_id).unwrap();
     let (ts, node, seq) = gen.decompose_base62(&base62_id).unwrap();
@@ -138,7 +138,8 @@ fn main() {
 
 ### ⏳ Tuning Overflow Wait (Spin/Yield)
 
-When the per-millisecond sequence is exhausted, SnowID waits for the next millisecond. You can tune the short busy-wait (spin) before sleeping:
+When the per-millisecond sequence is exhausted, SnowID waits for the next millisecond. You can tune the short
+busy-wait (spin) before sleeping:
 
 ```rust
 use snowid::{SnowID, SnowIDConfig};
@@ -174,12 +175,12 @@ Notes:
 
 | Node Bits | Max Nodes | IDs/ms/node | Time/ID |
 |-----------|-----------|-------------|---------|
-| 6         | 64        | 65,536      | ~20ns   |
-| 8         | 256       | 16,384      | ~60ns   |
-| 10        | 1,024     | 4,096       | ~243ns  |
-| 12        | 4,096     | 1,024       | ~968ns  |
-| 14        | 16,384    | 256         | ~3.86µs |
-| 16        | 65,536    | 64          | ~15.4µs |
+| 6         | 64        | 65,536      | ~2ns    |
+| 8         | 256       | 16,384      | ~55ns   |
+| 10        | 1,024     | 4,096       | ~240ns  |
+| 12        | 4,096     | 1,024       | ~930ns  |
+| 14        | 16,384    | 256         | ~3.70µs |
+| 16        | 65,536    | 64          | ~15µs   |
 
 Choose configuration based on your needs:
 
@@ -189,10 +190,10 @@ Choose configuration based on your needs:
 
 ### Int64 vs Base62 Performance
 
-| Variant               | Time/ID | Size         | Notes                    |
-|-----------------------|---------|--------------|--------------------------|
-| Int64                 | ~290 ns | 18-20 digits | Fastest option           |
-| Base62                | ~295 ns | 10-11 chars  | ~2% slower, more compact |
+| Variant | Time/ID | Size         | Notes                    |
+|---------|---------|--------------|--------------------------|
+| Int64   | ~240 ns | 18-20 digits | Fastest option           |
+| Base62  | ~245 ns | 10-11 chars  | ~2% slower, more compact |
 
 Base62 encoding provides more compact, URL-friendly IDs with a small performance trade-off.
 

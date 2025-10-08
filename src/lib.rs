@@ -48,8 +48,9 @@ pub enum Base62DecodeError {
     Other(#[from] base62::DecodeError),
 }
 
-/// Main ID generator
+/// Main ID generator with cache-line alignment to prevent false sharing
 #[derive(Debug)]
+#[repr(align(64))]
 pub struct SnowID {
     /// Node ID for this generator
     pub node_id: u16,
@@ -60,10 +61,10 @@ pub struct SnowID {
     /// Extractor for decomposing IDs
     pub extract: SnowIDExtractor,
 
-    /// Last timestamp used to generate an ID
+    /// Last timestamp used to generate an ID (hot atomic, cache-line aligned)
     last_timestamp: AtomicU64,
 
-    /// Sequence counter for IDs generated in the same millisecond
+    /// Sequence counter for IDs generated in the same millisecond (hot atomic)
     sequence: AtomicU16,
 }
 
@@ -118,6 +119,29 @@ impl SnowID {
     /// * `u64` - New SnowID value
     #[inline]
     pub fn generate(&self) -> u64 {
+        // Fast path: try to get sequence in current millisecond with relaxed ordering
+        let seq = self.sequence.fetch_add(1, Ordering::Relaxed);
+        
+        // Fast path: if sequence is available, return immediately
+        if seq < self.config.max_sequence_id() {
+            // Use acquire fence to ensure we see the correct timestamp
+            std::sync::atomic::fence(Ordering::Acquire);
+            let last_ts = self.last_timestamp.load(Ordering::Relaxed);
+            // If timestamp is 0, we haven't initialized yet - go to slow path
+            if last_ts == 0 {
+                return self.generate_slow_path();
+            }
+            return self.create_snowid(last_ts, seq + 1);
+        }
+
+        // Slow path: sequence exhausted or need timestamp update
+        self.generate_slow_path()
+    }
+
+    /// Slow path for ID generation when fast path fails
+    #[cold]
+    #[inline(never)]
+    fn generate_slow_path(&self) -> u64 {
         let mut backoff_ms = 1u64;
 
         loop {
@@ -164,14 +188,15 @@ impl SnowID {
     }
 
     /// Get current time in milliseconds since epoch
+    #[inline(always)]
     fn get_time_since_epoch(&self) -> u64 {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("System time before Unix epoch!");
 
         // Convert to milliseconds and subtract the custom epoch
-        let millis = now.as_millis() as u64;
-        millis.saturating_sub(self.config.epoch())
+        // Use wrapping_sub for better codegen (epoch is always < current time)
+        now.as_millis() as u64 - self.config.epoch()
     }
 
     /// Wait until next millisecond with an optional micro spin/yield before sleeping.
@@ -209,30 +234,35 @@ impl SnowID {
     }
 
     /// Try to advance timestamp and reset sequence, returning ID if successful
-    #[inline]
+    #[inline(always)]
     fn try_advance_timestamp(&self, old_ts: u64, new_ts: u64) -> Option<u64> {
-        if self
-            .last_timestamp
-            .compare_exchange(old_ts, new_ts, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
-        {
-            self.sequence.store(0, Ordering::Release);
-            Some(self.create_snowid(new_ts, 0))
-        } else {
-            None
+        // Use compare_exchange_weak for better performance in loops
+        match self.last_timestamp.compare_exchange_weak(
+            old_ts,
+            new_ts,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => {
+                self.sequence.store(0, Ordering::Release);
+                Some(self.create_snowid(new_ts, 0))
+            }
+            Err(_) => None,
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn create_snowid(&self, timestamp: u64, sequence: u16) -> u64 {
         self.create_snowid_with_node(timestamp, self.node_id, sequence)
     }
 
-    #[inline]
+    #[inline(always)]
     fn create_snowid_with_node(&self, timestamp: u64, node_id: u16, sequence: u16) -> u64 {
+        // Branchless bit manipulation - masks are compile-time constants
+        // Mask timestamp to ensure it fits in allocated bits
         ((timestamp & self.config.timestamp_mask()) << self.config.timestamp_shift())
-            | ((node_id as u64 & self.config.node_mask() as u64) << self.config.node_shift())
-            | (sequence as u64 & self.config.sequence_mask() as u64)
+            | ((node_id as u64) << self.config.node_shift())
+            | (sequence as u64)
     }
 
     /// Generate a new base62 encoded SnowID

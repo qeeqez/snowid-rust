@@ -15,12 +15,12 @@ mod tests {
 
         // Generate IDs concurrently
         for _ in 0..num_threads {
-            let gen = Arc::clone(&generator);
+            let generator_clone = Arc::clone(&generator);
             handles.push(thread::spawn(move || {
                 (0..ids_per_thread)
                     .map(|_| {
-                        let gen = gen.lock().unwrap();
-                        gen.generate()
+                        let generator_lock = generator_clone.lock().unwrap();
+                        generator_lock.generate()
                     })
                     .collect::<Vec<_>>()
             }));
@@ -102,11 +102,11 @@ mod tests {
         let mut handles = Vec::with_capacity(num_threads);
 
         for _ in 0..num_threads {
-            let gen = Arc::clone(&generator);
+            let generator_clone = Arc::clone(&generator);
             handles.push(thread::spawn(move || {
                 let mut v = Vec::with_capacity(ids_per_thread);
                 for _ in 0..ids_per_thread {
-                    v.push(gen.generate());
+                    v.push(generator_clone.generate());
                 }
                 v
             }));

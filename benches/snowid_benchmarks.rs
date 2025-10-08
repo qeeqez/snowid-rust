@@ -67,14 +67,14 @@ pub fn overflow_stress_concurrent_lockfree(c: &mut Criterion) {
             group.bench_function(format!("threads/{threads}/per_thread/{per_thread}"), |b| {
                 b.iter_batched(
                     || std::sync::Arc::new(SnowID::with_config(1, cfg).unwrap()),
-                    |gen| {
+                    |generator| {
                         let mut handles = Vec::with_capacity(threads);
                         for _ in 0..threads {
-                            let g = std::sync::Arc::clone(&gen);
+                            let generator_clone = std::sync::Arc::clone(&generator);
                             handles.push(std::thread::spawn(move || {
                                 let mut last = 0u64;
                                 for _ in 0..per_thread {
-                                    last = g.generate();
+                                    last = generator_clone.generate();
                                 }
                                 last
                             }));
@@ -118,9 +118,9 @@ pub fn concurrent_benchmarks(c: &mut Criterion) {
                 let mut handles = Vec::with_capacity(thread_count);
 
                 for _ in 0..thread_count {
-                    let gen = std::sync::Arc::clone(&generator);
+                    let generator_clone = std::sync::Arc::clone(&generator);
                     handles.push(std::thread::spawn(move || {
-                        black_box(gen.lock().unwrap().generate());
+                        black_box(generator_clone.lock().unwrap().generate());
                     }));
                 }
 

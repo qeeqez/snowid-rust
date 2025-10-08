@@ -2,8 +2,7 @@
 
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::thread;
-use std::time::Duration;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod config;
 mod error;
@@ -15,25 +14,25 @@ pub use config::SnowIDConfig;
 pub use error::SnowIDError;
 pub use extractor::SnowIDExtractor;
 
-// Re-export base62 functions from the external crate with appropriate type conversions
+/// Re-export base62 encode function from the external crate with appropriate type conversions
 pub fn base62_encode(id: u64) -> String {
-    // Maximum size needed for u64 in base62 is 11 bytes
+    // The maximum size needed for u64 in base62 is 11 bytes
     let mut buf = [0u8; 11];
     let len = base62::encode_bytes(id, &mut buf).unwrap();
     // base62 output is always valid ASCII
     std::str::from_utf8(&buf[..len]).unwrap().to_owned()
 }
 
-// Decode a base62 string to a u64, handling potential overflow
+/// Decode a base62 string to a u64, handling potential overflow
 pub fn base62_decode(encoded: &str) -> Result<u64, Base62DecodeError> {
     let decoded = base62::decode(encoded).map_err(Base62DecodeError::from)?;
 
     // Check if the decoded value fits in a u64
-    if decoded > u64::MAX as u128 {
+    let Ok(value) = u64::try_from(decoded) else {
         return Err(Base62DecodeError::Overflow);
-    }
+    };
 
-    Ok(decoded as u64)
+    Ok(value)
 }
 
 // Define our own error type that wraps the external crate's error
@@ -96,20 +95,18 @@ impl SnowID {
     /// * `Result<SnowID, Error>` - New SnowID generator or error if node_id is invalid
     pub fn with_config(node_id: u16, config: SnowIDConfig) -> Result<Self, SnowIDError> {
         // Validate node ID
-        if node_id > config.max_node_id() {
+        let max_node_id = config.max_node_id();
+        if node_id > max_node_id {
             return Err(SnowIDError::InvalidNodeId {
                 node_id,
-                max: config.max_node_id(),
+                max: max_node_id,
             });
         }
-
-        // Create extractor with the same configuration
-        let extract = SnowIDExtractor::new(config);
 
         Ok(Self {
             node_id,
             config,
-            extract,
+            extract: SnowIDExtractor::new(config),
             last_timestamp: AtomicU64::new(0),
             sequence: AtomicU16::new(0),
         })
@@ -133,23 +130,17 @@ impl SnowID {
 
             if ts > last_ts {
                 // Try to move the generator to the new millisecond
-                match self.last_timestamp.compare_exchange(
-                    last_ts,
-                    ts,
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                ) {
-                    Ok(_) => {
-                        // New millisecond: start sequence at 0
-                        self.sequence.store(0, Ordering::Release);
-                        return self.create_snowid(ts, 0);
-                    }
-                    Err(_actual) => {
-                        // Someone else advanced the timestamp; retry
-                        // fall-through to same-ts handling below on next loop iteration
-                        continue;
-                    }
+                if self
+                    .last_timestamp
+                    .compare_exchange(last_ts, ts, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
+                {
+                    // New millisecond: start sequence at 0
+                    self.sequence.store(0, Ordering::Release);
+                    return self.create_snowid(ts, 0);
                 }
+                // Someone else advanced the timestamp; retry
+                continue;
             }
 
             // Same millisecond: increment sequence atomically and use the returned slot
@@ -171,21 +162,15 @@ impl SnowID {
                     // Another thread already advanced; restart outer loop
                     break;
                 }
-                match self.last_timestamp.compare_exchange(
-                    current_last,
-                    next_ts,
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                ) {
-                    Ok(_) => {
-                        self.sequence.store(0, Ordering::Release);
-                        return self.create_snowid(next_ts, 0);
-                    }
-                    Err(_) => {
-                        // Lost the race; retry inner publish or restart
-                        continue;
-                    }
+                if self
+                    .last_timestamp
+                    .compare_exchange(current_last, next_ts, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
+                {
+                    self.sequence.store(0, Ordering::Release);
+                    return self.create_snowid(next_ts, 0);
                 }
+                // Lost the race; retry inner publish or restart
             }
         }
     }
@@ -206,12 +191,10 @@ impl SnowID {
     fn wait_next_millis(&self, from_timestamp: u64, mut backoff_ms: u64) -> u64 {
         loop {
             // Micro spin/yield to quickly catch the boundary without oversleeping
-            let cfg = self.config; // Copy config (Copy)
-            if cfg.spin_enabled() && cfg.spin_loops() > 0 {
-                let yield_every = cfg.spin_yield_every();
-                for i in 0..cfg.spin_loops() {
-                    let new_ts = self.get_time_since_epoch();
-                    if new_ts > from_timestamp {
+            if self.config.spin_enabled() && self.config.spin_loops() > 0 {
+                let yield_every = self.config.spin_yield_every();
+                for i in 0..self.config.spin_loops() {
+                    if let Some(new_ts) = self.check_timestamp_advanced(from_timestamp) {
                         return new_ts;
                     }
                     std::hint::spin_loop();
@@ -223,12 +206,18 @@ impl SnowID {
 
             // Fall back to sleep with exponential backoff under heavy contention
             thread::sleep(Duration::from_millis(backoff_ms));
-            let new_ts = self.get_time_since_epoch();
-            if new_ts > from_timestamp {
+            if let Some(new_ts) = self.check_timestamp_advanced(from_timestamp) {
                 return new_ts;
             }
-            backoff_ms = (backoff_ms.saturating_mul(2)).min(Self::MAX_BACKOFF_MS);
+            backoff_ms = backoff_ms.saturating_mul(2).min(Self::MAX_BACKOFF_MS);
         }
+    }
+
+    /// Check if timestamp has advanced beyond the given value
+    #[inline]
+    fn check_timestamp_advanced(&self, from_timestamp: u64) -> Option<u64> {
+        let new_ts = self.get_time_since_epoch();
+        (new_ts > from_timestamp).then_some(new_ts)
     }
 
     #[inline]

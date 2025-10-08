@@ -4,9 +4,9 @@ mod tests {
 
     #[test]
     fn test_wait_next_millis_progresses() {
-        let gen = SnowID::new(1).unwrap();
-        let from = gen.get_time_since_epoch();
-        let next = gen.wait_next_millis(from, 1);
+        let generator = SnowID::new(1).unwrap();
+        let from = generator.get_time_since_epoch();
+        let next = generator.wait_next_millis(from, 1);
         assert!(next > from);
     }
 
@@ -17,9 +17,9 @@ mod tests {
             .spin_loops(0)
             .spin_yield_every(0)
             .build();
-        let gen = SnowID::with_config(1, cfg).unwrap();
-        let from = gen.get_time_since_epoch();
-        let next = gen.wait_next_millis(from, 1);
+        let generator = SnowID::with_config(1, cfg).unwrap();
+        let from = generator.get_time_since_epoch();
+        let next = generator.wait_next_millis(from, 1);
         assert!(next > from);
     }
 }

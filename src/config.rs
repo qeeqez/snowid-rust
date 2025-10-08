@@ -33,6 +33,12 @@ pub enum SnowIDConfigError {
 }
 
 impl SnowIDConfig {
+    /// Calculate mask for given number of bits
+    #[inline]
+    const fn calculate_mask(bits: u8) -> u16 {
+        ((1u32 << bits) - 1) as u16
+    }
+
     /// Create new SnowIDConfig with given node bits
     fn new(node_bits: u8, custom_epoch: u64) -> Self {
         let sequence_bits = SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - node_bits;
@@ -42,8 +48,8 @@ impl SnowIDConfig {
             timestamp_shift: SnowID::TOTAL_NODE_AND_SEQUENCE_BITS,
             node_shift: sequence_bits,
             timestamp_mask: (1u64 << SnowID::TIMESTAMP_BITS) - 1,
-            node_mask: ((1u32 << node_bits) - 1) as u16,
-            sequence_mask: ((1u32 << sequence_bits) - 1) as u16,
+            node_mask: Self::calculate_mask(node_bits),
+            sequence_mask: Self::calculate_mask(sequence_bits),
             spin_enabled: DEFAULT_SPIN_ENABLED,
             spin_loops: DEFAULT_SPIN_LOOPS,
             spin_yield_every: DEFAULT_SPIN_YIELD_EVERY,
@@ -167,9 +173,9 @@ impl SnowIDConfigBuilder {
     /// # Returns
     /// * `Result<Self, SnowIDConfigError>` - Builder instance or validation error
     pub fn node_bits(mut self, bits: u8) -> Result<Self, SnowIDConfigError> {
-        if !(6..=16).contains(&bits) {
+        let true = (6..=16).contains(&bits) else {
             return Err(SnowIDConfigError::InvalidNodeBits { bits });
-        }
+        };
         self.node_bits = bits;
         Ok(self)
     }
@@ -178,29 +184,26 @@ impl SnowIDConfigBuilder {
     ///
     /// # Arguments
     /// * `epoch` - Custom epoch timestamp in milliseconds since Unix epoch
-    ///
-    /// # Returns
-    /// * `Self` - Builder instance for chaining
-    pub fn epoch(mut self, epoch: u64) -> Self {
+    pub const fn epoch(mut self, epoch: u64) -> Self {
         self.custom_epoch = epoch;
         self
     }
 
     /// Enable or disable micro spin before sleep on overflow
-    pub fn enable_spin(mut self, enable: bool) -> Self {
+    pub const fn enable_spin(mut self, enable: bool) -> Self {
         self.spin_enabled = enable;
         self
     }
 
     /// Set number of spin loops attempted before falling back to sleep
     /// A value of 0 disables spinning.
-    pub fn spin_loops(mut self, loops: u32) -> Self {
+    pub const fn spin_loops(mut self, loops: u32) -> Self {
         self.spin_loops = loops;
         self
     }
 
     /// Set spin yield cadence. Yield every N spin iterations; 0 disables yielding.
-    pub fn spin_yield_every(mut self, n: u32) -> Self {
+    pub const fn spin_yield_every(mut self, n: u32) -> Self {
         self.spin_yield_every = n;
         self
     }
@@ -241,7 +244,7 @@ mod tests {
                     config.sequence_bits(),
                     SnowID::TOTAL_NODE_AND_SEQUENCE_BITS - bits
                 );
-                assert_eq!(config.max_node_id(), ((1u32 << bits) - 1) as u16);
+                assert_eq!(config.max_node_id(), SnowIDConfig::calculate_mask(bits));
             }
         }
 

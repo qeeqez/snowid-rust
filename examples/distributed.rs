@@ -12,7 +12,7 @@ fn main() {
 
     // Spawn multiple threads simulating distributed ID generation
     for thread_id in 0..4 {
-        let gen = Arc::clone(&generator);
+        let generator_clone = Arc::clone(&generator);
         handles.push(thread::spawn(move || {
             let mut ids = HashSet::new();
             let mut rng = rng();
@@ -21,14 +21,14 @@ fn main() {
             for i in 0..5 {
                 // Lock the generator to generate ID
                 let id = {
-                    let gen = gen.lock().unwrap();
-                    gen.generate()
+                    let generator_lock = generator_clone.lock().unwrap();
+                    generator_lock.generate()
                 };
 
                 // Extract components (doesn't need mutable access)
                 let (ts, node, seq) = {
-                    let gen = gen.lock().unwrap();
-                    gen.extract.decompose(id)
+                    let generator_lock = generator_clone.lock().unwrap();
+                    generator_lock.extract.decompose(id)
                 };
 
                 println!("Thread {thread_id} generated ID {i} (ts={ts}, node={node}, seq={seq})");

@@ -1,10 +1,10 @@
 [package]
 
 name = "snowid"
-version = "0.2.2"
+version = "0.3.0"
 
-edition = "2021"
-rust-version = "1.85.1"
+edition = "2024"
+rust-version = "1.90.0"
 
 authors = ["Maksim Sasnouski <maksim@rixl.com>"]
 description = "A Rust library for generating SnowID - a Snowflake-like timestamp-based distributed unique identifier"

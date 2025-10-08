@@ -1,5 +1,5 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use snowid::{base62_decode, base62_encode, SnowID};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use snowid::{SnowID, base62_decode, base62_encode};
 use std::hint::black_box;
 
 // Common test values used across benchmarks

@@ -121,7 +121,7 @@ impl SnowID {
     pub fn generate(&self) -> u64 {
         // Fast path: try to get sequence in current millisecond with relaxed ordering
         let seq = self.sequence.fetch_add(1, Ordering::Relaxed);
-        
+
         // Fast path: if sequence is available, return immediately
         if seq < self.config.max_sequence_id() {
             // Use acquire fence to ensure we see the correct timestamp

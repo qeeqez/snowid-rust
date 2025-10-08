@@ -1,4 +1,4 @@
-use snowid::{base62_encode, SnowID};
+use snowid::{SnowID, base62_encode};
 use std::time::{Duration, Instant};
 
 fn main() {

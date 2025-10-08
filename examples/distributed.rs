@@ -1,4 +1,4 @@
-use rand::{rng, Rng};
+use rand::{Rng, rng};
 use snowid::SnowID;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};

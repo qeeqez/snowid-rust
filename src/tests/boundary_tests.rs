@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use crate::config::SnowIDConfig;
     use crate::SnowID;
     use crate::SnowIDError;
+    use crate::config::SnowIDConfig;
 
     #[test]
     fn test_invalid_node_id() {

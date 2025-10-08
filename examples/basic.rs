@@ -31,5 +31,7 @@ fn print_id(id: u64, generator: &mut SnowID) {
     let timestamp: u64 = since_epoch + generator.config.epoch();
     let datetime = DateTime::<Utc>::from_timestamp_millis(timestamp as i64).unwrap();
 
-    println!("  ID: {id}, Timestamp: {timestamp}, Human date: {datetime}, Node ID: {node}, Sequence: {sequence}");
+    println!(
+        "  ID: {id}, Timestamp: {timestamp}, Human date: {datetime}, Node ID: {node}, Sequence: {sequence}"
+    );
 }

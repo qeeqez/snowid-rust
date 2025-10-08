@@ -35,7 +35,7 @@
 
 ```toml
 [dependencies]
-snowid = "0.2.0"
+snowid = "0.2.1"
 ```
 
 ```rust

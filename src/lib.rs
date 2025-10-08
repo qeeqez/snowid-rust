@@ -121,7 +121,7 @@ impl SnowID {
         let mut backoff_ms = 1u64;
 
         loop {
-            // Read current time and last seen timestamp
+            // Read the current time and last seen timestamp
             let now = self.get_time_since_epoch();
             let last_ts = self.last_timestamp.load(Ordering::Acquire);
 
@@ -130,14 +130,8 @@ impl SnowID {
 
             if ts > last_ts {
                 // Try to move the generator to the new millisecond
-                if self
-                    .last_timestamp
-                    .compare_exchange(last_ts, ts, Ordering::AcqRel, Ordering::Acquire)
-                    .is_ok()
-                {
-                    // New millisecond: start sequence at 0
-                    self.sequence.store(0, Ordering::Release);
-                    return self.create_snowid(ts, 0);
+                if let Some(id) = self.try_advance_timestamp(last_ts, ts) {
+                    return id;
                 }
                 // Someone else advanced the timestamp; retry
                 continue;
@@ -149,7 +143,6 @@ impl SnowID {
                 let seq_to_use = seq_prev + 1;
                 return self.create_snowid(ts, seq_to_use);
             }
-
             // Sequence exhausted: wait for the next millisecond with exponential backoff
             let wait_from = ts;
             let next_ts = self.wait_next_millis(wait_from, backoff_ms);
@@ -162,13 +155,8 @@ impl SnowID {
                     // Another thread already advanced; restart outer loop
                     break;
                 }
-                if self
-                    .last_timestamp
-                    .compare_exchange(current_last, next_ts, Ordering::AcqRel, Ordering::Acquire)
-                    .is_ok()
-                {
-                    self.sequence.store(0, Ordering::Release);
-                    return self.create_snowid(next_ts, 0);
+                if let Some(id) = self.try_advance_timestamp(current_last, next_ts) {
+                    return id;
                 }
                 // Lost the race; retry inner publish or restart
             }
@@ -218,6 +206,21 @@ impl SnowID {
     fn check_timestamp_advanced(&self, from_timestamp: u64) -> Option<u64> {
         let new_ts = self.get_time_since_epoch();
         (new_ts > from_timestamp).then_some(new_ts)
+    }
+
+    /// Try to advance timestamp and reset sequence, returning ID if successful
+    #[inline]
+    fn try_advance_timestamp(&self, old_ts: u64, new_ts: u64) -> Option<u64> {
+        if self
+            .last_timestamp
+            .compare_exchange(old_ts, new_ts, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            self.sequence.store(0, Ordering::Release);
+            Some(self.create_snowid(new_ts, 0))
+        } else {
+            None
+        }
     }
 
     #[inline]

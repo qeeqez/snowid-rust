@@ -5,9 +5,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-    assignees:
-      - "theqeeqez"
+      day: "monday"    
     commit-message:
       prefix: "ci"
       include: "scope"
@@ -17,9 +15,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-    assignees:
-      - "theqeeqez"
+      day: "monday"    
     commit-message:
       prefix: "build"
       include: "scope"

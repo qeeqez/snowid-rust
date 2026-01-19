@@ -30,7 +30,7 @@ opt-level = 0
 debug = true
 
 [dependencies]
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 base62 = "2.2.3"
 
 [dev-dependencies]

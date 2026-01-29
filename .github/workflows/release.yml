@@ -1,7 +1,10 @@
 name: release-please
 
 on:
-  push:
+  workflow_run:
+    workflows: [ "Test" ]
+    types:
+      - completed
     branches:
       - main
 
@@ -23,7 +26,6 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # Publish to crates.io after release is created
   publish-crate:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created }}

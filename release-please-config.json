@@ -1,6 +1,8 @@
 {
     "$schema": "https://raw.githubusercontent.com/googleapis/release-please-action/v4/schema.json",
     "release-type": "rust",
+    "include-component-in-tag": false,
+    "include-v-in-tag": true,
     "packages": {
         ".": {
             "package-name": "snowid"

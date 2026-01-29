@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use crate::tests::test_utils::assert_unique_and_monotonic;
     use crate::*;
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
@@ -27,33 +28,13 @@ mod tests {
         }
 
         // Collect all generated IDs
-        let mut all_ids = HashSet::new();
+        let mut all_ids = Vec::with_capacity(num_threads * ids_per_thread);
         for handle in handles {
-            let ids = handle.join().unwrap();
-            all_ids.extend(ids);
+            all_ids.extend(handle.join().unwrap());
         }
 
-        // Verify no duplicates were generated
-        assert_eq!(
-            all_ids.len(),
-            num_threads * ids_per_thread,
-            "Expected {} unique IDs, but got {}",
-            num_threads * ids_per_thread,
-            all_ids.len()
-        );
-
-        // Verify all IDs are monotonically increasing
-        let mut ids: Vec<_> = all_ids.into_iter().collect();
-        ids.sort_unstable();
-        for i in 1..ids.len() {
-            assert!(
-                ids[i] > ids[i - 1],
-                "ID at position {} ({}) is not greater than previous ID ({})",
-                i,
-                ids[i],
-                ids[i - 1]
-            );
-        }
+        // Use shared utility for uniqueness and monotonicity checks
+        assert_unique_and_monotonic(all_ids, num_threads * ids_per_thread);
     }
 
     #[test]
@@ -114,18 +95,11 @@ mod tests {
 
         let mut all_ids = Vec::with_capacity(num_threads * ids_per_thread);
         for h in handles {
-            let mut ids = h.join().expect("thread panicked");
-            all_ids.append(&mut ids);
+            all_ids.extend(h.join().expect("thread panicked"));
         }
 
-        // Uniqueness
-        let set: HashSet<_> = all_ids.iter().cloned().collect();
-        assert_eq!(set.len(), all_ids.len());
-
-        // Global monotonicity when sorted
-        all_ids.sort_unstable();
-        for i in 1..all_ids.len() {
-            assert!(all_ids[i] > all_ids[i - 1]);
-        }
+        // Use shared utility for uniqueness and monotonicity checks
+        assert_unique_and_monotonic(all_ids, num_threads * ids_per_thread);
     }
 }
+

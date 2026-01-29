@@ -104,7 +104,7 @@ fn main() {
 ### ℹ️ Available Methods
 
 ```rust
-use snowid::SnowID;
+use snowid::{SnowID, BASE62_MAX_LEN};
 
 fn main() {
     let gen = SnowID::new(1).unwrap();
@@ -112,9 +112,14 @@ fn main() {
     // Generate numeric IDs
     let id = gen.generate();
 
-    // Generate Base62 encoded IDs
+    // Generate Base62 encoded IDs (allocates String)
     let base62_id = gen.generate_base62();
     let (base62_id, raw_id) = gen.generate_base62_with_raw();
+
+    // Zero-allocation Base62 generation (for hot paths)
+    let (bytes, len) = gen.generate_base62_array();  // Returns [u8; 11] + length
+    let mut buf = [0u8; BASE62_MAX_LEN];
+    let (str_ref, raw_id) = gen.generate_base62_into(&mut buf);  // Returns &str + raw ID
 
     // Decode Base62 IDs
     let decoded = gen.decode_base62(&base62_id).unwrap();
@@ -190,12 +195,14 @@ Choose configuration based on your needs:
 
 ### Int64 vs Base62 Performance
 
-| Variant | Time/ID | Size         | Notes                    |
-|---------|---------|--------------|--------------------------|
-| Int64   | ~240 ns | 18-20 digits | Fastest option           |
-| Base62  | ~245 ns | 10-11 chars  | ~2% slower, more compact |
+| Variant          | Time/ID  | Size         | Notes                        |
+|------------------|----------|--------------|------------------------------|
+| Int64            | ~308 ns  | 18-20 digits | Fastest option               |
+| Base62 (String)  | ~321 ns  | 10-11 chars  | Compact, URL-friendly        |
+| Base62 (array)   | ~321 ns  | 10-11 chars  | Zero-allocation, hot paths   |
+| Base62 (into)    | ~321 ns  | 10-11 chars  | Zero-allocation, reuse buffer|
 
-Base62 encoding provides more compact, URL-friendly IDs with a small performance trade-off.
+Base62 encoding provides more compact, URL-friendly IDs. For hot paths, use `generate_base62_array()` or `generate_base62_into()` to avoid heap allocations.
 
 ## 🚀 Examples
 

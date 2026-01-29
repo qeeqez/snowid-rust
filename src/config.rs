@@ -1,5 +1,6 @@
 use crate::SnowID;
-use thiserror::Error;
+use std::error::Error;
+use std::fmt;
 
 /// Default configuration values
 const DEFAULT_NODE_BITS: u8 = 10;
@@ -27,12 +28,23 @@ pub struct SnowIDConfig {
 }
 
 /// Errors related to `SnowIDConfig` builder validation
-#[derive(Debug, Clone, PartialEq, Error)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SnowIDConfigError {
     /// Provided node bits are out of the supported range [6, 16]
-    #[error("Node bits {bits} must be between 6 and 16")]
     InvalidNodeBits { bits: u8 },
 }
+
+impl fmt::Display for SnowIDConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SnowIDConfigError::InvalidNodeBits { bits } => {
+                write!(f, "Node bits {} must be between 6 and 16", bits)
+            }
+        }
+    }
+}
+
+impl Error for SnowIDConfigError {}
 
 impl SnowIDConfig {
     /// Calculate mask for given number of bits

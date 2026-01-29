@@ -109,25 +109,29 @@ pub fn component_extraction_benchmarks(c: &mut Criterion) {
 }
 
 pub fn concurrent_benchmarks(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Concurrent");
+    let mut group = c.benchmark_group("Concurrent LockFree");
 
     for &thread_count in &[2, 4, 8] {
         group.bench_function(format!("threads/{thread_count}"), |b| {
-            b.iter(|| {
-                let generator = std::sync::Arc::new(std::sync::Mutex::new(SnowID::new(1).unwrap()));
-                let mut handles = Vec::with_capacity(thread_count);
+            b.iter_batched(
+                || std::sync::Arc::new(SnowID::new(1).unwrap()),
+                |generator| {
+                    let mut handles = Vec::with_capacity(thread_count);
 
-                for _ in 0..thread_count {
-                    let generator_clone = std::sync::Arc::clone(&generator);
-                    handles.push(std::thread::spawn(move || {
-                        black_box(generator_clone.lock().unwrap().generate());
-                    }));
-                }
+                    for _ in 0..thread_count {
+                        let generator_clone = std::sync::Arc::clone(&generator);
+                        handles.push(std::thread::spawn(move || {
+                            // Direct lock-free access - no Mutex!
+                            black_box(generator_clone.generate())
+                        }));
+                    }
 
-                for handle in handles {
-                    handle.join().unwrap();
-                }
-            });
+                    for handle in handles {
+                        handle.join().unwrap();
+                    }
+                },
+                BatchSize::SmallInput,
+            );
         });
     }
 

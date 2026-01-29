@@ -4,4 +4,5 @@ mod concurrent_tests;
 mod core_tests;
 mod extraction_tests;
 mod sequence_tests;
+pub mod test_utils;
 mod timing_tests;

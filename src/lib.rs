@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+pub mod base62;
 mod config;
 mod error;
 mod extractor;
@@ -14,39 +15,11 @@ pub use config::SnowIDConfig;
 pub use error::SnowIDError;
 pub use extractor::SnowIDExtractor;
 
-/// Re-export base62 encode function from the external crate with appropriate type conversions
-pub fn base62_encode(id: u64) -> String {
-    // The maximum size needed for u64 in base62 is 11 bytes
-    let mut buf = [0u8; 11];
-    let len = base62::encode_bytes(id, &mut buf).unwrap();
-    // base62 output is always valid ASCII
-    std::str::from_utf8(&buf[..len]).unwrap().to_owned()
-}
-
-/// Decode a base62 string to a u64, handling potential overflow
-pub fn base62_decode(encoded: &str) -> Result<u64, Base62DecodeError> {
-    let decoded = base62::decode(encoded).map_err(Base62DecodeError::from)?;
-
-    // Check if the decoded value fits in a u64
-    let Ok(value) = u64::try_from(decoded) else {
-        return Err(Base62DecodeError::Overflow);
-    };
-
-    Ok(value)
-}
-
-// Define our own error type that wraps the external crate's error
-#[derive(Debug, thiserror::Error)]
-pub enum Base62DecodeError {
-    #[error("Invalid base62 character")]
-    InvalidCharacter,
-
-    #[error("Decoded value would overflow u64")]
-    Overflow,
-
-    #[error("Base62 decode error: {0}")]
-    Other(#[from] base62::DecodeError),
-}
+// Re-export base62 types at crate root for backward compatibility
+pub use base62::DecodeError as Base62DecodeError;
+pub use base62::MAX_LEN as BASE62_MAX_LEN;
+pub use base62::{decode as base62_decode, encode as base62_encode};
+pub use base62::{encode_array as base62_encode_array, encode_into as base62_encode_into};
 
 /// Main ID generator with cache-line alignment to prevent false sharing
 #[derive(Debug)]
@@ -60,6 +33,12 @@ pub struct SnowID {
 
     /// Extractor for decomposing IDs
     pub extract: SnowIDExtractor,
+
+    /// Base time in ms since custom epoch, captured at initialization (for fast time queries)
+    base_time_ms: u64,
+
+    /// Base instant captured at initialization (for fast monotonic time delta)
+    base_instant: coarsetime::Instant,
 
     /// Last timestamp used to generate an ID (hot atomic, cache-line aligned)
     last_timestamp: AtomicU64,
@@ -103,11 +82,20 @@ impl SnowID {
                 max: max_node_id,
             });
         }
+        // Capture wall-clock time at initialization for hybrid time approach
+        // This lets us use fast monotonic coarsetime for increments
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time before Unix epoch!");
+        let base_time_ms = now.as_millis() as u64 - config.epoch();
+        let base_instant = coarsetime::Instant::now();
 
         Ok(Self {
             node_id,
             config,
             extract: SnowIDExtractor::new(config),
+            base_time_ms,
+            base_instant,
             last_timestamp: AtomicU64::new(0),
             sequence: AtomicU16::new(0),
         })
@@ -187,16 +175,19 @@ impl SnowID {
         }
     }
 
-    /// Get current time in milliseconds since epoch
+    /// Get current time in milliseconds since custom epoch
+    /// Uses hybrid approach: wall-clock base + fast monotonic delta
+    /// This is ~20x faster than SystemTime::now() on Linux
     #[inline(always)]
     fn get_time_since_epoch(&self) -> u64 {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time before Unix epoch!");
-
-        // Convert to milliseconds and subtract the custom epoch
-        // Use wrapping_sub for better codegen (epoch is always < current time)
-        now.as_millis() as u64 - self.config.epoch()
+        // Fast path: get monotonic elapsed time since initialization
+        let now = coarsetime::Instant::now();
+        let delta_ms = now
+            .duration_since(self.base_instant)
+            .as_millis();
+        
+        // Add to base wall-clock time captured at init
+        self.base_time_ms + delta_ms
     }
 
     /// Wait until next millisecond with an optional micro spin/yield before sleeping.
@@ -257,7 +248,7 @@ impl SnowID {
     }
 
     #[inline(always)]
-    fn create_snowid_with_node(&self, timestamp: u64, node_id: u16, sequence: u16) -> u64 {
+    pub(crate) fn create_snowid_with_node(&self, timestamp: u64, node_id: u16, sequence: u16) -> u64 {
         // Branchless bit manipulation - masks are compile-time constants
         // Mask timestamp to ensure it fits in allocated bits
         ((timestamp & self.config.timestamp_mask()) << self.config.timestamp_shift())
@@ -265,7 +256,32 @@ impl SnowID {
             | (sequence as u64)
     }
 
-    /// Generate a new base62 encoded SnowID
+    /// Generate a new base62 encoded SnowID (zero-allocation, array-based)
+    ///
+    /// # Returns
+    /// * `([u8; 11], usize)` - Tuple of encoded bytes and actual length
+    #[inline]
+    pub fn generate_base62_array(&self) -> ([u8; BASE62_MAX_LEN], usize) {
+        let id = self.generate();
+        base62_encode_array(id)
+    }
+
+    /// Generate a new base62 encoded SnowID into caller-provided buffer
+    /// Returns str slice of the encoded portion and the raw u64 value
+    ///
+    /// # Arguments
+    /// * `buf` - Buffer of at least BASE62_MAX_LEN (11) bytes
+    ///
+    /// # Returns
+    /// * `(&str, u64)` - Tuple of encoded string slice and raw ID
+    #[inline]
+    pub fn generate_base62_into<'a>(&self, buf: &'a mut [u8; BASE62_MAX_LEN]) -> (&'a str, u64) {
+        let id = self.generate();
+        (base62_encode_into(id, buf), id)
+    }
+
+    /// Generate a new base62 encoded SnowID (allocates String)
+    /// For hot paths, prefer generate_base62_array or generate_base62_into
     ///
     /// # Returns
     /// * `String` - New base62 encoded SnowID value
@@ -275,6 +291,7 @@ impl SnowID {
     }
 
     /// Generate a new base62 encoded SnowID and return both the encoded string and the raw u64 value
+    /// For hot paths, prefer generate_base62_into
     ///
     /// # Returns
     /// * `(String, u64)` - Tuple containing the base62 encoded SnowID and the raw u64 value

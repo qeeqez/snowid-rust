@@ -182,10 +182,8 @@ impl SnowID {
     fn get_time_since_epoch(&self) -> u64 {
         // Fast path: get monotonic elapsed time since initialization
         let now = coarsetime::Instant::now();
-        let delta_ms = now
-            .duration_since(self.base_instant)
-            .as_millis();
-        
+        let delta_ms = now.duration_since(self.base_instant).as_millis();
+
         // Add to base wall-clock time captured at init
         self.base_time_ms + delta_ms
     }
@@ -248,7 +246,12 @@ impl SnowID {
     }
 
     #[inline(always)]
-    pub(crate) fn create_snowid_with_node(&self, timestamp: u64, node_id: u16, sequence: u16) -> u64 {
+    pub(crate) fn create_snowid_with_node(
+        &self,
+        timestamp: u64,
+        node_id: u16,
+        sequence: u16,
+    ) -> u64 {
         // Branchless bit manipulation - masks are compile-time constants
         // Mask timestamp to ensure it fits in allocated bits
         ((timestamp & self.config.timestamp_mask()) << self.config.timestamp_shift())

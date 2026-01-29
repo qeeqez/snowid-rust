@@ -1,5 +1,5 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use snowid::{SnowID, base62_decode, base62_encode, base62_encode_array, BASE62_MAX_LEN};
+use snowid::{BASE62_MAX_LEN, SnowID, base62_decode, base62_encode, base62_encode_array};
 use std::hint::black_box;
 
 // Common test values used across benchmarks
@@ -69,7 +69,6 @@ pub fn base62_encoding(c: &mut Criterion) {
 
     group.finish();
 }
-
 
 pub fn base62_decoding(c: &mut Criterion) {
     let mut group = c.benchmark_group("Base62 Decoding");

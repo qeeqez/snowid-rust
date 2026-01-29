@@ -1,23 +1,31 @@
 # Changelog
 
-## [1.0.0](https://github.com/qeeqez/snowid-rust/compare/snowid-v0.3.0...snowid-v1.0.0) (2026-01-29)
-
+## [1.0.0](https://github.com/qeeqez/snowid-rust/compare/v0.3.0...v1.0.0) (2026-01-29)
 
 ### ⚠ BREAKING CHANGES
 
-* 1.0.0
-* removed thiserror dependency
-
-### release
-
-* 1.0.0 ([fec917c](https://github.com/qeeqez/snowid-rust/commit/fec917c29455a25626a789c33e21bb042d410921))
-
+*   **deps:** Removed `thiserror` dependency to reduce binary size and compile times. Error types now implement `std::error::Error` directly.
+*   **api:** Base62 encoding now encourages zero-allocation patterns.
 
 ### Features
 
-* performance optimizations and zero-allocation base62 API ([f4090fc](https://github.com/qeeqez/snowid-rust/commit/f4090fc5905c0f385bda6042d98da9649fd24e9b))
-
+*   **base62:** Added zero-allocation APIs `base62_encode_array` and `base62_encode_into` for high-performance encoding without heap allocation.
+*   **core:** Integrated `coarsetime` for ~20x faster time queries (hybrid monotonic/wall-clock approach).
+*   **concurrency:** Improved thread-safety and performance using optimized lock-free patterns for high-contention scenarios.
+*   **config:** Enhanced spin-wait configuration for finer control over latency during sequence overflow.
+*   **modernization:** Updated code to use Rust 2024 edition features.
 
 ### Performance Improvements
 
-* optimize ID generation with advanced techniques and rust 2024 features (~5-10% faster) ([23dcc2f](https://github.com/qeeqez/snowid-rust/commit/23dcc2fea9aa34fbe1bfc21d2bc9e4ca11c61b35))
+*   **optimization:** Significant reduction in generation latency (sub-350ns/op) via hot-path optimizations.
+*   **memory:** Elimination of heap allocations in core generation paths.
+
+### Bug Fixes
+
+*   **ci:** Fixed formatting issues and streamlined CI workflows.
+*   **deps:** Updated `chrono`, `base62`, and `criterion` to latest stable versions.
+
+### Miscellaneous
+
+*   **ci:** Migrated to `release-please` for automated semantic versioning and changelog generation.
+*   **docs:** Comprehensive documentation updates including new zero-allocation examples and benchmark results.

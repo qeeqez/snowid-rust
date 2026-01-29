@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/qeeqez/snowid-rust/compare/v1.0.0...v1.0.1) (2026-01-29)
+
+
+### Bug Fixes
+
+* update readme ([58fbcc4](https://github.com/qeeqez/snowid-rust/commit/58fbcc4afa3096511a5e2239c61fdf735e6a66c4))
+
 ## [1.0.0](https://github.com/qeeqez/snowid-rust/compare/v0.3.0...v1.0.0) (2026-01-29)
 
 ### ⚠ BREAKING CHANGES

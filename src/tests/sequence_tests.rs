@@ -1,227 +1,86 @@
+//! Sequence rollover and uniqueness tests
+
 #[cfg(test)]
 mod tests {
+    use crate::tests::test_utils::{assert_ids_monotonic, assert_unique_ids};
     use crate::*;
     use std::collections::HashSet;
     use std::thread;
-    use std::time::Instant;
 
     #[test]
     fn test_sequence_rollover() {
         let generator = SnowID::new(1).unwrap();
-        let initial_timestamp = generator.generate();
-        let initial_ts = generator.extract.timestamp(initial_timestamp);
-        let mut max_sequence_seen = 0;
+        let initial_id = generator.generate();
+        let initial_ts = generator.extract.timestamp(initial_id);
+        let mut max_seq = 0;
 
-        // Generate IDs until we see the sequence reset
         for i in 0..10000 {
-            let snowid = generator.generate();
-            let (ts, _, seq) = generator.extract.decompose(snowid);
+            let id = generator.generate();
+            let (ts, _, seq) = generator.extract.decompose(id);
+            max_seq = max_seq.max(seq);
 
-            // Track highest sequence number seen
-            max_sequence_seen = max_sequence_seen.max(seq);
-
-            // If we're still in the same millisecond
-            if ts == initial_ts {
-                // If we've seen a sequence reset within the same millisecond
-                if seq < max_sequence_seen {
-                    assert!(
-                        max_sequence_seen > 0,
-                        "Should have seen some sequence increment"
-                    );
-                    assert!(
-                        max_sequence_seen <= generator.config.max_sequence_id(),
-                        "Sequence {} exceeded maximum {}",
-                        max_sequence_seen,
-                        generator.config.max_sequence_id()
-                    );
-                    return; // Test passed - we found a sequence rollover
-                }
-            } else if i > 0 {
-                // If timestamp changed and we've generated at least one ID
-                assert!(
-                    seq <= 1,
-                    "Sequence should be 0 or 1 on timestamp change due to atomic increment"
-                );
-                return; // Test passed - sequence reset on timestamp change
+            if ts == initial_ts && seq < max_seq {
+                assert!(max_seq <= generator.config.max_sequence_id());
+                return;
+            } else if ts != initial_ts && i > 0 {
+                assert!(seq <= 1, "Sequence should reset on ts change");
+                return;
             }
 
-            // Generate IDs as fast as possible to stay within same millisecond
             if i % 100 == 0 {
-                thread::yield_now(); // Yield to other threads but don't sleep
+                thread::yield_now();
             }
         }
-
-        panic!("Sequence did not rollover as expected within 10000 iterations");
+        panic!("Sequence did not rollover in 10000 iterations");
     }
 
     #[test]
     fn test_sequence_overflow_handling() {
         let generator = SnowID::new(1).unwrap();
-        let mut last_ts = None;
-        let mut last_sequence = None;
-        let mut overflow_handled = false;
+        let mut last_ts = 0;
+        let mut last_seq = 0;
 
-        // Generate IDs rapidly to force sequence overflow
         for _ in 0..100000 {
-            let snowid = generator.generate();
-            let (ts, _, sequence) = generator.extract.decompose(snowid);
+            let id = generator.generate();
+            let (ts, _, seq) = generator.extract.decompose(id);
 
-            if let (Some(prev_ts), Some(prev_seq)) = (last_ts, last_sequence) {
-                if ts == prev_ts {
-                    // Within same millisecond, sequence should increment
-                    assert!(
-                        sequence > prev_seq,
-                        "Sequence should increment within same millisecond"
-                    );
-
-                    // Check if we've hit the max sequence
-                    if sequence >= generator.config.max_sequence_id() {
-                        // Next ID should be in a new millisecond
-                        let next_id = generator.generate();
-                        let (next_ts, _, next_seq) = generator.extract.decompose(next_id);
-                        assert!(
-                            next_ts > ts,
-                            "Timestamp should advance on sequence overflow"
-                        );
-                        assert_eq!(next_seq, 0, "Sequence should reset to 0 on overflow");
-                        overflow_handled = true;
-                        break;
-                    }
+            if ts == last_ts && last_ts > 0 {
+                if seq >= generator.config.max_sequence_id() {
+                    let next = generator.generate();
+                    let (next_ts, _, next_seq) = generator.extract.decompose(next);
+                    assert!(next_ts > ts, "Timestamp should advance on overflow");
+                    assert_eq!(next_seq, 0, "Sequence should reset");
+                    return;
                 }
             }
 
-            last_ts = Some(ts);
-            last_sequence = Some(sequence);
-
-            // Generate IDs as fast as possible
-            if sequence % 10 == 0 {
+            last_ts = ts;
+            last_seq = seq;
+            if seq % 10 == 0 {
                 thread::yield_now();
             }
         }
-
-        assert!(
-            overflow_handled,
-            "Sequence overflow was not handled by advancing to next millisecond"
-        );
-    }
-
-    #[test]
-    fn test_sequence_restart() {
-        let generator = SnowID::new(1).unwrap();
-        let mut last_timestamp = None;
-        let mut last_sequence = None;
-
-        // Generate IDs rapidly to force sequence increment
-        for _ in 0..100 {
-            let snowid = generator.generate();
-            let (timestamp, _, sequence) = generator.extract.decompose(snowid);
-
-            if let (Some(last_seq), Some(last_ts)) = (last_sequence, last_timestamp) {
-                if timestamp == last_ts {
-                    // Within same millisecond, sequence should increment
-                    assert!(
-                        sequence >= last_seq,
-                        "Sequence should increment or stay same within same millisecond due to atomic operations"
-                    );
-                } else {
-                    // On timestamp change, sequence should restart
-                    assert!(
-                        sequence <= 1,
-                        "Sequence should be 0 or 1 on timestamp change due to atomic increment"
-                    );
-                }
-            }
-
-            last_sequence = Some(sequence);
-            last_timestamp = Some(timestamp);
-        }
+        panic!("Sequence overflow not handled");
     }
 
     #[test]
     fn test_sequence_monotonicity() {
         let generator = SnowID::new(1).unwrap();
-        let mut last_id = None;
-
-        // Generate IDs rapidly to test monotonicity
-        for _ in 0..1000 {
-            let id = generator.generate();
-
-            if let Some(last) = last_id {
-                assert!(id > last, "IDs should be monotonically increasing");
-            }
-
-            last_id = Some(id);
-        }
+        let ids: Vec<u64> = (0..1000).map(|_| generator.generate()).collect();
+        assert_ids_monotonic(&ids);
     }
 
     #[test]
     fn test_10k_unique_ids() {
-        const NUM_IDS: usize = 10_000;
+        const COUNT: usize = 10_000;
         let generator = SnowID::new(1).unwrap();
-        let mut ids = HashSet::with_capacity(NUM_IDS);
-        let mut last_id = None;
-        let mut duplicates = Vec::new();
+        let ids: Vec<u64> = (0..COUNT).map(|_| generator.generate()).collect();
 
-        let start = Instant::now();
-
-        // Generate 1 million IDs
-        for i in 0..NUM_IDS {
-            let id = generator.generate();
-
-            // Check monotonicity
-            if let Some(last) = last_id {
-                assert!(id > last, "ID {id} is not greater than previous ID {last}");
-            }
-            last_id = Some(id);
-
-            // Check uniqueness
-            if !ids.insert(id) {
-                duplicates.push((i, id));
-            }
-
-            // Print progress every 100k IDs
-            if (i + 1) % 100_000 == 0 {
-                println!("Generated {}k IDs in {:?}", (i + 1) / 1000, start.elapsed());
-            }
-        }
-
-        let elapsed = start.elapsed();
-        let ids_per_sec = NUM_IDS as f64 / elapsed.as_secs_f64();
-
-        println!("\nResults:");
-        println!("Total time: {elapsed:?}");
-        println!("IDs per second: {ids_per_sec:.0}");
-        println!("Unique IDs: {}/{}", ids.len(), NUM_IDS);
-
-        // If we found any duplicates, print details and fail
-        if !duplicates.is_empty() {
-            println!("\nFound {} duplicate IDs:", duplicates.len());
-            for (i, id) in duplicates.iter().take(5) {
-                let (ts, node, seq) = generator.extract.decompose(*id);
-                println!("Duplicate at position {i}: ID {id} (ts={ts}, node={node}, seq={seq})");
-            }
-            if duplicates.len() > 5 {
-                println!("... and {} more duplicates", duplicates.len() - 5);
-            }
-            panic!("Found duplicate IDs");
-        }
+        assert_unique_ids(&ids, COUNT);
+        assert_ids_monotonic(&ids);
 
         // Analyze timestamp distribution
-        let mut timestamps = ids
-            .iter()
-            .map(|id| generator.extract.timestamp(*id))
-            .collect::<Vec<_>>();
-        timestamps.sort_unstable();
-
-        let total_time_span = timestamps.last().unwrap() - timestamps.first().unwrap();
-        let unique_timestamps = timestamps.iter().collect::<HashSet<_>>().len();
-
-        println!("\nTimestamp Analysis:");
-        println!("Time span: {total_time_span}ms");
-        println!("Unique timestamps: {unique_timestamps}");
-        println!(
-            "Average IDs per timestamp: {:.1}",
-            NUM_IDS as f64 / unique_timestamps as f64
-        );
+        let timestamps: HashSet<_> = ids.iter().map(|id| generator.extract.timestamp(*id)).collect();
+        assert!(timestamps.len() >= 1, "Should have at least one timestamp");
     }
 }

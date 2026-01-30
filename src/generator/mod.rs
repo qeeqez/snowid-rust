@@ -87,6 +87,7 @@ impl SnowID {
     }
 
     #[inline(always)]
+    #[allow(dead_code)] // Used in timing_tests.rs
     pub(crate) fn get_time_since_epoch(&self) -> u64 {
         self.now_ms()
     }
@@ -104,6 +105,7 @@ impl SnowID {
     }
 
     #[inline(always)]
+    #[allow(dead_code)] // Used in extractor.rs tests
     pub(crate) fn create_snowid_with_node(&self, ts: u64, node: u16, seq: u16) -> u64 {
         ((ts & self.config.timestamp_mask()) << self.config.timestamp_shift())
             | ((node as u64) << self.config.node_shift())

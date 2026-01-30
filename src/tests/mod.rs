@@ -3,6 +3,7 @@ mod boundary_tests;
 mod concurrent_tests;
 mod config_tests;
 mod core_tests;
+mod edge_case_tests;
 mod extraction_tests;
 mod sequence_tests;
 pub mod test_utils;

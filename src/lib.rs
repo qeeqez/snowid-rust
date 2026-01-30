@@ -34,11 +34,7 @@ pub struct SnowID {
     /// Extractor for decomposing IDs
     pub extract: SnowIDExtractor,
 
-    /// Base time in ms since custom epoch, captured at initialization (for fast time queries)
-    base_time_ms: u64,
 
-    /// Base instant captured at initialization (for fast monotonic time delta)
-    base_instant: coarsetime::Instant,
 
     /// Last timestamp used to generate an ID (hot atomic, cache-line aligned)
     last_timestamp: AtomicU64,
@@ -82,20 +78,10 @@ impl SnowID {
                 max: max_node_id,
             });
         }
-        // Capture wall-clock time at initialization for hybrid time approach
-        // This lets us use fast monotonic coarsetime for increments
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time before Unix epoch!");
-        let base_time_ms = now.as_millis() as u64 - config.epoch();
-        let base_instant = coarsetime::Instant::now();
-
         Ok(Self {
             node_id,
             config,
             extract: SnowIDExtractor::new(config),
-            base_time_ms,
-            base_instant,
             last_timestamp: AtomicU64::new(0),
             sequence: AtomicU16::new(0),
         })
@@ -107,22 +93,22 @@ impl SnowID {
     /// * `u64` - New SnowID value
     #[inline]
     pub fn generate(&self) -> u64 {
-        // Fast path: try to get sequence in current millisecond with relaxed ordering
-        let seq = self.sequence.fetch_add(1, Ordering::Relaxed);
+        // Always get current wall-clock time first
+        let now = self.get_time_since_epoch();
+        let last_ts = self.last_timestamp.load(Ordering::Acquire);
 
-        // Fast path: if sequence is available, return immediately
+        // If time has advanced, go to slow path to update timestamp
+        if now > last_ts {
+            return self.generate_slow_path();
+        }
+
+        // Same millisecond - fast path: try to get next sequence slot
+        let seq = self.sequence.fetch_add(1, Ordering::Relaxed);
         if seq < self.config.max_sequence_id() {
-            // Use acquire fence to ensure we see the correct timestamp
-            std::sync::atomic::fence(Ordering::Acquire);
-            let last_ts = self.last_timestamp.load(Ordering::Relaxed);
-            // If timestamp is 0, we haven't initialized yet - go to slow path
-            if last_ts == 0 {
-                return self.generate_slow_path();
-            }
             return self.create_snowid(last_ts, seq + 1);
         }
 
-        // Slow path: sequence exhausted or need timestamp update
+        // Sequence exhausted - slow path to wait for next millisecond
         self.generate_slow_path()
     }
 
@@ -175,17 +161,15 @@ impl SnowID {
         }
     }
 
-    /// Get current time in milliseconds since custom epoch
-    /// Uses hybrid approach: wall-clock base + fast monotonic delta
-    /// This is ~20x faster than SystemTime::now() on Linux
+    /// Get current time in milliseconds since epoch
     #[inline(always)]
     fn get_time_since_epoch(&self) -> u64 {
-        // Fast path: get monotonic elapsed time since initialization
-        let now = coarsetime::Instant::now();
-        let delta_ms = now.duration_since(self.base_instant).as_millis();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time before Unix epoch!");
 
-        // Add to base wall-clock time captured at init
-        self.base_time_ms + delta_ms
+        // Convert to milliseconds and subtract the custom epoch
+        now.as_millis() as u64 - self.config.epoch()
     }
 
     /// Wait until next millisecond with an optional micro spin/yield before sleeping.

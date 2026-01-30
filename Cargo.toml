@@ -31,7 +31,6 @@ debug = true
 
 [dependencies]
 base62 = "2.2.3"
-coarsetime = "0.1"
 
 [dev-dependencies]
 criterion = { version = "0.8.1", features = ["html_reports"] }

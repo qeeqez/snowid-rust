@@ -8,12 +8,12 @@
 
 **Generate 64-bit unique identifiers that are:**
 
-- ⚡️ Fast (~244ns per ID)
+- ⚡️ Fast (~325ns per ID)
 - 📈 Time-sorted
 - 🔄 Monotonic
 - 🔒 Thread-safe
 - 🌐 Distributed-ready
-- 🎯 Small dependency footprint (`thiserror`, `base62` for encoding)
+- 🎯 Minimal dependencies (`base62` for encoding)
 
 ## 🧮 ID Structure
 
@@ -180,11 +180,11 @@ Notes:
 
 | Node Bits | Max Nodes | IDs/ms/node | Time/ID |
 |-----------|-----------|-------------|---------|
-| 6         | 64        | 65,536      | ~2ns    |
-| 8         | 256       | 16,384      | ~55ns   |
-| 10        | 1,024     | 4,096       | ~240ns  |
-| 12        | 4,096     | 1,024       | ~930ns  |
-| 14        | 16,384    | 256         | ~3.70µs |
+| 6         | 64        | 65,536      | ~23ns   |
+| 8         | 256       | 16,384      | ~100ns  |
+| 10        | 1,024     | 4,096       | ~325ns  |
+| 12        | 4,096     | 1,024       | ~1.25µs |
+| 14        | 16,384    | 256         | ~5.2µs  |
 | 16        | 65,536    | 64          | ~15µs   |
 
 Choose configuration based on your needs:
@@ -197,10 +197,10 @@ Choose configuration based on your needs:
 
 | Variant          | Time/ID  | Size         | Notes                        |
 |------------------|----------|--------------|------------------------------|
-| Int64            | ~308 ns  | 18-20 digits | Fastest option               |
-| Base62 (String)  | ~321 ns  | 10-11 chars  | Compact, URL-friendly        |
-| Base62 (array)   | ~321 ns  | 10-11 chars  | Zero-allocation, hot paths   |
-| Base62 (into)    | ~321 ns  | 10-11 chars  | Zero-allocation, reuse buffer|
+| Int64            | ~325 ns  | 18-20 digits | Fastest option               |
+| Base62 (String)  | ~350 ns  | 10-11 chars  | Compact, URL-friendly        |
+| Base62 (array)   | ~350 ns  | 10-11 chars  | Zero-allocation, hot paths   |
+| Base62 (into)    | ~350 ns  | 10-11 chars  | Zero-allocation, reuse buffer|
 
 Base62 encoding provides more compact, URL-friendly IDs. For hot paths, use `generate_base62_array()` or `generate_base62_into()` to avoid heap allocations.
 

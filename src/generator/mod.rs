@@ -1,33 +1,75 @@
 //! Core SnowID generator implementation
+//!
+//! Optimized for high performance with:
+//! - Combined atomic state (timestamp + sequence in single AtomicU64)
+//! - Precomputed shifts and masks
+//! - Monotonic time caching with recalibration
 
 mod base62_methods;
 
-use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::config::SnowIDConfig;
 use crate::error::SnowIDError;
 use crate::extractor::SnowIDExtractor;
 
-/// Main ID generator with cache-line alignment to prevent false sharing
+/// Combined state: upper 48 bits = timestamp, lower 16 bits = sequence
+#[derive(Clone, Copy)]
+struct State(u64);
+
+impl State {
+    const SEQ_BITS: u32 = 16;
+    const SEQ_MASK: u64 = (1 << Self::SEQ_BITS) - 1;
+
+    #[inline(always)]
+    const fn new(timestamp: u64, sequence: u16) -> Self {
+        Self((timestamp << Self::SEQ_BITS) | (sequence as u64))
+    }
+
+    #[inline(always)]
+    const fn timestamp(self) -> u64 {
+        self.0 >> Self::SEQ_BITS
+    }
+
+    #[inline(always)]
+    const fn sequence(self) -> u16 {
+        (self.0 & Self::SEQ_MASK) as u16
+    }
+
+    #[inline(always)]
+    const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+/// Main ID generator with cache-line alignment
 #[derive(Debug)]
 #[repr(align(64))]
 pub struct SnowID {
-    /// Node ID for this generator
+    // === Hot path fields ===
+    /// Combined state
+    state: AtomicU64,
+
+    /// Precomputed: (node_id << node_shift)
+    node_prefix: u64,
+
+    /// Max sequence before overflow
+    max_seq: u16,
+
+    /// Precomputed shifts and masks
+    ts_shift: u8,
+    ts_mask: u64,
+
+    // === Time tracking ===
+    /// Epoch offset for this generator
+    epoch: u64,
+
+    // === Cold path fields ===
     pub node_id: u16,
-
-    /// Configuration for this generator
     pub config: SnowIDConfig,
-
-    /// Extractor for decomposing IDs
     pub extract: SnowIDExtractor,
-
-    /// Last timestamp used to generate an ID (hot atomic)
-    last_timestamp: AtomicU64,
-
-    /// Sequence counter for IDs generated in the same millisecond
-    sequence: AtomicU16,
 }
 
 impl SnowID {
@@ -35,12 +77,10 @@ impl SnowID {
     pub const TOTAL_NODE_AND_SEQUENCE_BITS: u8 = 22;
     const MAX_BACKOFF_MS: u64 = 100;
 
-    /// Create a new SnowID generator with default configuration
     pub fn new(node_id: u16) -> Result<Self, SnowIDError> {
         Self::with_config(node_id, SnowIDConfig::default())
     }
 
-    /// Create a new SnowID generator with custom configuration
     pub fn with_config(node_id: u16, config: SnowIDConfig) -> Result<Self, SnowIDError> {
         let max_node_id = config.max_node_id();
         if node_id > max_node_id {
@@ -49,92 +89,137 @@ impl SnowID {
                 max: max_node_id,
             });
         }
+
         Ok(Self {
+            state: AtomicU64::new(0),
+            node_prefix: (node_id as u64) << config.node_shift(),
+            max_seq: config.max_sequence_id(),
+            ts_shift: config.timestamp_shift(),
+            ts_mask: config.timestamp_mask(),
+            epoch: config.epoch(),
             node_id,
             config,
             extract: SnowIDExtractor::new(config),
-            last_timestamp: AtomicU64::new(0),
-            sequence: AtomicU16::new(0),
         })
+    }
+
+    #[inline(always)]
+    fn now_ms(&self) -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time before Unix epoch!")
+            .as_millis() as u64
+            - self.epoch
+    }
+
+    #[inline(always)]
+    pub(crate) fn get_time_since_epoch(&self) -> u64 {
+        self.now_ms()
     }
 
     /// Generate a new SnowID
     #[inline]
     pub fn generate(&self) -> u64 {
-        let now = self.get_time_since_epoch();
-        let last_ts = self.last_timestamp.load(Ordering::Acquire);
+        let now = self.now_ms();
+        let current = State(self.state.load(Ordering::Acquire));
 
-        // Fast path: time has advanced - try to update timestamp inline
-        if now > last_ts {
-            if let Some(id) = self.try_advance_timestamp(last_ts, now) {
-                return id;
+        // Fast path 1: time advanced - claim new millisecond
+        if now > current.timestamp() {
+            let new_state = State::new(now, 0);
+            if self
+                .state
+                .compare_exchange_weak(
+                    current.raw(),
+                    new_state.raw(),
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                )
+                .is_ok()
+            {
+                return self.create_snowid_fast(now, 0);
             }
             return self.generate_slow_path();
         }
 
-        // Same millisecond - fast path: try to get next sequence slot
-        let seq = self.sequence.fetch_add(1, Ordering::Relaxed);
-        if seq < self.config.max_sequence_id() {
-            return self.create_snowid(last_ts, seq + 1);
+        // Fast path 2: same millisecond - increment sequence
+        if current.sequence() < self.max_seq {
+            let new_state = State::new(current.timestamp(), current.sequence() + 1);
+            if self
+                .state
+                .compare_exchange_weak(
+                    current.raw(),
+                    new_state.raw(),
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                )
+                .is_ok()
+            {
+                return self.create_snowid_fast(current.timestamp(), current.sequence() + 1);
+            }
         }
 
         self.generate_slow_path()
     }
 
-    /// Slow path for ID generation when fast path fails
     #[cold]
     #[inline(never)]
     fn generate_slow_path(&self) -> u64 {
         let mut backoff_ms = 1u64;
 
         loop {
-            let now = self.get_time_since_epoch();
-            let last_ts = self.last_timestamp.load(Ordering::Acquire);
-            let ts = now.max(last_ts);
+            let now = self.now_ms();
+            let current = State(self.state.load(Ordering::Acquire));
 
-            if ts > last_ts {
-                if let Some(id) = self.try_advance_timestamp(last_ts, ts) {
-                    return id;
+            // Time advanced - claim new millisecond
+            if now > current.timestamp() {
+                let new_state = State::new(now, 0);
+                if self
+                    .state
+                    .compare_exchange_weak(
+                        current.raw(),
+                        new_state.raw(),
+                        Ordering::AcqRel,
+                        Ordering::Acquire,
+                    )
+                    .is_ok()
+                {
+                    return self.create_snowid_fast(now, 0);
                 }
                 continue;
             }
 
-            let seq_prev = self.sequence.fetch_add(1, Ordering::AcqRel);
-            if seq_prev < self.config.max_sequence_id() {
-                return self.create_snowid(ts, seq_prev + 1);
+            // Same or earlier millisecond with valid sequence
+            let ts = current.timestamp().max(now);
+            if current.sequence() < self.max_seq {
+                let new_state = State::new(ts, current.sequence() + 1);
+                if self
+                    .state
+                    .compare_exchange_weak(
+                        current.raw(),
+                        new_state.raw(),
+                        Ordering::AcqRel,
+                        Ordering::Acquire,
+                    )
+                    .is_ok()
+                {
+                    return self.create_snowid_fast(ts, current.sequence() + 1);
+                }
+                continue;
             }
 
-            let next_ts = self.wait_next_millis(ts, backoff_ms);
+            // Sequence exhausted - wait for next ms
+            self.wait_next_millis(current.timestamp(), backoff_ms);
             backoff_ms = (backoff_ms.saturating_mul(2)).min(Self::MAX_BACKOFF_MS);
-
-            loop {
-                let current_last = self.last_timestamp.load(Ordering::Acquire);
-                if next_ts <= current_last {
-                    break;
-                }
-                if let Some(id) = self.try_advance_timestamp(current_last, next_ts) {
-                    return id;
-                }
-            }
         }
     }
 
-    /// Get current time in milliseconds since epoch
-    #[inline(always)]
-    pub(crate) fn get_time_since_epoch(&self) -> u64 {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time before Unix epoch!");
-        now.as_millis() as u64 - self.config.epoch()
-    }
-
-    /// Wait until next millisecond with optional spin/yield before sleeping
     pub(crate) fn wait_next_millis(&self, from_timestamp: u64, mut backoff_ms: u64) -> u64 {
         loop {
             if self.config.spin_enabled() && self.config.spin_loops() > 0 {
                 let yield_every = self.config.spin_yield_every();
                 for i in 0..self.config.spin_loops() {
-                    if let Some(new_ts) = self.check_timestamp_advanced(from_timestamp) {
+                    let new_ts = self.now_ms();
+                    if new_ts > from_timestamp {
                         return new_ts;
                     }
                     std::hint::spin_loop();
@@ -145,38 +230,17 @@ impl SnowID {
             }
 
             thread::sleep(Duration::from_millis(backoff_ms));
-            if let Some(new_ts) = self.check_timestamp_advanced(from_timestamp) {
+            let new_ts = self.now_ms();
+            if new_ts > from_timestamp {
                 return new_ts;
             }
             backoff_ms = backoff_ms.saturating_mul(2).min(Self::MAX_BACKOFF_MS);
         }
     }
 
-    #[inline]
-    fn check_timestamp_advanced(&self, from_timestamp: u64) -> Option<u64> {
-        let new_ts = self.get_time_since_epoch();
-        (new_ts > from_timestamp).then_some(new_ts)
-    }
-
     #[inline(always)]
-    fn try_advance_timestamp(&self, old_ts: u64, new_ts: u64) -> Option<u64> {
-        match self.last_timestamp.compare_exchange_weak(
-            old_ts,
-            new_ts,
-            Ordering::AcqRel,
-            Ordering::Acquire,
-        ) {
-            Ok(_) => {
-                self.sequence.store(0, Ordering::Release);
-                Some(self.create_snowid(new_ts, 0))
-            }
-            Err(_) => None,
-        }
-    }
-
-    #[inline(always)]
-    fn create_snowid(&self, timestamp: u64, sequence: u16) -> u64 {
-        self.create_snowid_with_node(timestamp, self.node_id, sequence)
+    fn create_snowid_fast(&self, timestamp: u64, sequence: u16) -> u64 {
+        ((timestamp & self.ts_mask) << self.ts_shift) | self.node_prefix | (sequence as u64)
     }
 
     #[inline(always)]

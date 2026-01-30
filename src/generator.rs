@@ -80,12 +80,17 @@ impl SnowID {
     /// * `u64` - New SnowID value
     #[inline]
     pub fn generate(&self) -> u64 {
-        // Always get current wall-clock time first
+        // Get current wall-clock time
         let now = self.get_time_since_epoch();
         let last_ts = self.last_timestamp.load(Ordering::Acquire);
 
-        // If time has advanced, go to slow path to update timestamp
+        // Fast path: time has advanced - try to update timestamp inline
         if now > last_ts {
+            // Try to claim the new millisecond
+            if let Some(id) = self.try_advance_timestamp(last_ts, now) {
+                return id;
+            }
+            // Lost the race, fall through to slow path
             return self.generate_slow_path();
         }
 

@@ -43,7 +43,11 @@ mod tests {
     /// Verify ID bit structure: timestamp | node | sequence
     #[test]
     fn test_id_bit_structure() {
-        let cfg = SnowIDConfig::builder().node_bits(10).unwrap().epoch(0).build();
+        let cfg = SnowIDConfig::builder()
+            .node_bits(10)
+            .unwrap()
+            .epoch(0)
+            .build();
         let g = SnowID::with_config(0b1010101010, cfg).unwrap();
 
         let id = g.generate();
@@ -146,7 +150,11 @@ mod tests {
         let ts = g.extract.timestamp(id);
 
         // Timestamp should be reasonable (within ~2 years of epoch)
-        assert!(ts < 2 * 365 * 24 * 60 * 60 * 1000, "Expected ts < 2 years, got {}", ts);
+        assert!(
+            ts < 2 * 365 * 24 * 60 * 60 * 1000,
+            "Expected ts < 2 years, got {}",
+            ts
+        );
     }
 
     /// Test all supported node_bits configurations
@@ -201,7 +209,10 @@ mod tests {
 
             // Reconstruct ID manually
             let reconstructed = (ts << 22) | ((node as u64) << 12) | (seq as u64);
-            assert_eq!(id, reconstructed, "ID should round-trip through decomposition");
+            assert_eq!(
+                id, reconstructed,
+                "ID should round-trip through decomposition"
+            );
         }
     }
 }

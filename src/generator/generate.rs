@@ -4,9 +4,9 @@
 
 use std::sync::atomic::Ordering;
 
+use super::SnowID;
 use super::state::State;
 use super::wait::next_backoff;
-use super::SnowID;
 
 impl SnowID {
     /// Generate a new SnowID
@@ -55,7 +55,12 @@ impl SnowID {
     #[inline(always)]
     pub(crate) fn cas_state(&self, expected: State, new: State) -> bool {
         self.state
-            .compare_exchange_weak(expected.raw(), new.raw(), Ordering::AcqRel, Ordering::Acquire)
+            .compare_exchange_weak(
+                expected.raw(),
+                new.raw(),
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
             .is_ok()
     }
 

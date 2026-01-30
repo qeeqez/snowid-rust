@@ -51,8 +51,12 @@ mod tests {
             let ts = g.extract.timestamp(g.generate());
             let after = wall_clock_ms(epoch);
 
-            if ts < before { max_drift = max_drift.max((before - ts) as i64); }
-            if ts > after { max_drift = max_drift.max((ts - after) as i64); }
+            if ts < before {
+                max_drift = max_drift.max((before - ts) as i64);
+            }
+            if ts > after {
+                max_drift = max_drift.max((ts - after) as i64);
+            }
         }
         assert!(max_drift <= 5, "Max drift {}ms", max_drift);
     }
@@ -60,7 +64,10 @@ mod tests {
     #[test]
     fn test_multiple_generators_same_time() {
         let gens: Vec<_> = (0..5).map(|i| SnowID::new(i).unwrap()).collect();
-        let tss: Vec<_> = gens.iter().map(|g| g.extract.timestamp(g.generate())).collect();
+        let tss: Vec<_> = gens
+            .iter()
+            .map(|g| g.extract.timestamp(g.generate()))
+            .collect();
 
         let (min, max) = (*tss.iter().min().unwrap(), *tss.iter().max().unwrap());
         assert!(max - min <= 10, "Timestamps spread too wide");
@@ -69,10 +76,14 @@ mod tests {
     #[test]
     fn test_ids_sortable_by_time() {
         let g = SnowID::new(1).unwrap();
-        let ids: Vec<u64> = (0..10).map(|i| {
-            if i % 3 == 0 && i > 0 { thread::sleep(Duration::from_millis(5)); }
-            g.generate()
-        }).collect();
+        let ids: Vec<u64> = (0..10)
+            .map(|i| {
+                if i % 3 == 0 && i > 0 {
+                    thread::sleep(Duration::from_millis(5));
+                }
+                g.generate()
+            })
+            .collect();
         assert_ids_monotonic(&ids);
     }
 
@@ -87,7 +98,10 @@ mod tests {
     #[test]
     fn test_different_node_bits_configs() {
         for node_bits in [6u8, 10, 14, 16] {
-            let cfg = SnowIDConfig::builder().node_bits(node_bits).unwrap().build();
+            let cfg = SnowIDConfig::builder()
+                .node_bits(node_bits)
+                .unwrap()
+                .build();
             let g = SnowID::with_config(0, cfg).unwrap();
             assert_timestamp_accurate(g.extract.timestamp(g.generate()), g.config.epoch(), 10);
         }
@@ -110,7 +124,12 @@ mod tests {
             let ts2 = g.extract.timestamp(g.generate());
 
             let diff = ts2 - ts1;
-            assert!(diff >= (ms * 7 / 10) && diff <= ms * 2 + 5, "Sleep {}ms: got {}ms", ms, diff);
+            assert!(
+                diff >= (ms * 7 / 10) && diff <= ms * 2 + 5,
+                "Sleep {}ms: got {}ms",
+                ms,
+                diff
+            );
         }
     }
 
@@ -120,8 +139,12 @@ mod tests {
         let mut ids: Vec<u64> = Vec::new();
 
         for round in 0..3 {
-            for _ in 0..50 { ids.push(g.generate()); }
-            if round < 2 { thread::sleep(Duration::from_millis(10)); }
+            for _ in 0..50 {
+                ids.push(g.generate());
+            }
+            if round < 2 {
+                thread::sleep(Duration::from_millis(10));
+            }
         }
 
         assert_ids_monotonic(&ids);

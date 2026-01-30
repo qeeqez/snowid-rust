@@ -38,7 +38,6 @@ mod tests {
     fn test_sequence_overflow_handling() {
         let generator = SnowID::new(1).unwrap();
         let mut last_ts = 0;
-        let mut last_seq = 0;
 
         for _ in 0..100000 {
             let id = generator.generate();
@@ -55,7 +54,6 @@ mod tests {
             }
 
             last_ts = ts;
-            last_seq = seq;
             if seq % 10 == 0 {
                 thread::yield_now();
             }
@@ -80,7 +78,10 @@ mod tests {
         assert_ids_monotonic(&ids);
 
         // Analyze timestamp distribution
-        let timestamps: HashSet<_> = ids.iter().map(|id| generator.extract.timestamp(*id)).collect();
+        let timestamps: HashSet<_> = ids
+            .iter()
+            .map(|id| generator.extract.timestamp(*id))
+            .collect();
         assert!(timestamps.len() >= 1, "Should have at least one timestamp");
     }
 }

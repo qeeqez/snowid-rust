@@ -1,8 +1,8 @@
 //! Base62 convenience methods for SnowID generator
 
+use crate::base62::{DecodeError as Base62DecodeError, MAX_LEN as BASE62_MAX_LEN};
 use crate::base62::{decode as base62_decode, encode as base62_encode};
 use crate::base62::{encode_array as base62_encode_array, encode_into as base62_encode_into};
-use crate::base62::{DecodeError as Base62DecodeError, MAX_LEN as BASE62_MAX_LEN};
 
 use super::SnowID;
 

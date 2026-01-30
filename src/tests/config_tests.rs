@@ -2,8 +2,8 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{SnowIDConfig, SnowIDConfigError};
     use crate::SnowID;
+    use crate::config::{SnowIDConfig, SnowIDConfigError};
 
     #[test]
     fn test_valid_node_bits() {

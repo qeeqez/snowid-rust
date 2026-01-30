@@ -73,4 +73,3 @@ pub fn assert_timestamp_accurate(ts: u64, epoch: u64, tolerance_ms: u64) {
         tolerance_ms
     );
 }
-

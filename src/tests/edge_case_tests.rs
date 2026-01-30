@@ -21,7 +21,7 @@ mod tests {
 
         assert!(ts > 0);
         assert_eq!(node, 63);
-        assert!(seq <= 65535);
+        assert!(seq <= cfg.max_sequence_id());
     }
 
     /// Test extreme maximum: 16-bit node ID (65536 nodes, 64 seq/ms)

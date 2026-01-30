@@ -3,67 +3,33 @@
 //! Optimized for high performance with:
 //! - Combined atomic state (timestamp + sequence in single AtomicU64)
 //! - Precomputed shifts and masks
-//! - Monotonic time caching with recalibration
+//! - Modular wait/backoff strategies
 
 mod base62_methods;
+mod state;
+mod time;
+mod wait;
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::config::SnowIDConfig;
 use crate::error::SnowIDError;
 use crate::extractor::SnowIDExtractor;
 
-/// Combined state: upper 48 bits = timestamp, lower 16 bits = sequence
-#[derive(Clone, Copy)]
-struct State(u64);
-
-impl State {
-    const SEQ_BITS: u32 = 16;
-    const SEQ_MASK: u64 = (1 << Self::SEQ_BITS) - 1;
-
-    #[inline(always)]
-    const fn new(timestamp: u64, sequence: u16) -> Self {
-        Self((timestamp << Self::SEQ_BITS) | (sequence as u64))
-    }
-
-    #[inline(always)]
-    const fn timestamp(self) -> u64 {
-        self.0 >> Self::SEQ_BITS
-    }
-
-    #[inline(always)]
-    const fn sequence(self) -> u16 {
-        (self.0 & Self::SEQ_MASK) as u16
-    }
-
-    #[inline(always)]
-    const fn raw(self) -> u64 {
-        self.0
-    }
-}
+use state::State;
+use time::time_since_epoch;
+use wait::{next_backoff, sleep_until_next_ms, spin_wait, MAX_BACKOFF_MS};
 
 /// Main ID generator with cache-line alignment
 #[derive(Debug)]
 #[repr(align(64))]
 pub struct SnowID {
     // === Hot path fields ===
-    /// Combined state
     state: AtomicU64,
-
-    /// Precomputed: (node_id << node_shift)
     node_prefix: u64,
-
-    /// Max sequence before overflow
     max_seq: u16,
-
-    /// Precomputed shifts and masks
     ts_shift: u8,
     ts_mask: u64,
-
-    // === Time tracking ===
-    /// Epoch offset for this generator
     epoch: u64,
 
     // === Cold path fields ===
@@ -75,24 +41,32 @@ pub struct SnowID {
 impl SnowID {
     pub const TIMESTAMP_BITS: u32 = 42;
     pub const TOTAL_NODE_AND_SEQUENCE_BITS: u8 = 22;
-    const MAX_BACKOFF_MS: u64 = 100;
 
+    /// Create with default configuration
     pub fn new(node_id: u16) -> Result<Self, SnowIDError> {
         Self::with_config(node_id, SnowIDConfig::default())
     }
 
+    /// Create with custom configuration
     pub fn with_config(node_id: u16, config: SnowIDConfig) -> Result<Self, SnowIDError> {
-        let max_node_id = config.max_node_id();
-        if node_id > max_node_id {
-            return Err(SnowIDError::InvalidNodeId {
-                node_id,
-                max: max_node_id,
-            });
-        }
+        Self::validate_node_id(node_id, &config)?;
+        Ok(Self::build(node_id, config))
+    }
 
-        Ok(Self {
+    /// Validate node_id against config limits
+    fn validate_node_id(node_id: u16, config: &SnowIDConfig) -> Result<(), SnowIDError> {
+        let max = config.max_node_id();
+        if node_id > max {
+            return Err(SnowIDError::InvalidNodeId { node_id, max });
+        }
+        Ok(())
+    }
+
+    /// Build generator from validated inputs
+    fn build(node_id: u16, config: SnowIDConfig) -> Self {
+        Self {
             state: AtomicU64::new(0),
-            node_prefix: (node_id as u64) << config.node_shift(),
+            node_prefix: Self::compute_node_prefix(node_id, &config),
             max_seq: config.max_sequence_id(),
             ts_shift: config.timestamp_shift(),
             ts_mask: config.timestamp_mask(),
@@ -100,16 +74,19 @@ impl SnowID {
             node_id,
             config,
             extract: SnowIDExtractor::new(config),
-        })
+        }
     }
 
+    /// Precompute node prefix for fast ID assembly
+    #[inline(always)]
+    fn compute_node_prefix(node_id: u16, config: &SnowIDConfig) -> u64 {
+        (node_id as u64) << config.node_shift()
+    }
+
+    /// Get current time since epoch
     #[inline(always)]
     fn now_ms(&self) -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time before Unix epoch!")
-            .as_millis() as u64
-            - self.epoch
+        time_since_epoch(self.epoch)
     }
 
     #[inline(always)]
@@ -121,46 +98,53 @@ impl SnowID {
     #[inline]
     pub fn generate(&self) -> u64 {
         let now = self.now_ms();
-        let current = State(self.state.load(Ordering::Acquire));
+        let current = State::from_raw(self.state.load(Ordering::Acquire));
 
-        // Fast path 1: time advanced - claim new millisecond
+        // Fast path 1: time advanced
         if now > current.timestamp() {
-            let new_state = State::new(now, 0);
-            if self
-                .state
-                .compare_exchange_weak(
-                    current.raw(),
-                    new_state.raw(),
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                )
-                .is_ok()
-            {
-                return self.create_snowid_fast(now, 0);
+            if let Some(id) = self.try_claim_millisecond(current, now) {
+                return id;
             }
             return self.generate_slow_path();
         }
 
-        // Fast path 2: same millisecond - increment sequence
-        if current.sequence() < self.max_seq {
-            let new_state = State::new(current.timestamp(), current.sequence() + 1);
-            if self
-                .state
-                .compare_exchange_weak(
-                    current.raw(),
-                    new_state.raw(),
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                )
-                .is_ok()
-            {
-                return self.create_snowid_fast(current.timestamp(), current.sequence() + 1);
-            }
+        // Fast path 2: same millisecond, sequence available
+        if let Some(id) = self.try_increment_sequence(current) {
+            return id;
         }
 
         self.generate_slow_path()
     }
 
+    /// Try to claim new millisecond with sequence 0
+    #[inline]
+    fn try_claim_millisecond(&self, current: State, new_ts: u64) -> Option<u64> {
+        let new_state = State::new(new_ts, 0);
+        self.cas_state(current, new_state)
+            .then(|| self.assemble_id(new_ts, 0))
+    }
+
+    /// Try to increment sequence within current millisecond
+    #[inline]
+    fn try_increment_sequence(&self, current: State) -> Option<u64> {
+        if current.sequence() >= self.max_seq {
+            return None;
+        }
+        let new_seq = current.sequence() + 1;
+        let new_state = State::new(current.timestamp(), new_seq);
+        self.cas_state(current, new_state)
+            .then(|| self.assemble_id(current.timestamp(), new_seq))
+    }
+
+    /// Atomic compare-and-swap on state
+    #[inline(always)]
+    fn cas_state(&self, expected: State, new: State) -> bool {
+        self.state
+            .compare_exchange_weak(expected.raw(), new.raw(), Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+    }
+
+    /// Slow path for contended generation
     #[cold]
     #[inline(never)]
     fn generate_slow_path(&self) -> u64 {
@@ -168,90 +152,47 @@ impl SnowID {
 
         loop {
             let now = self.now_ms();
-            let current = State(self.state.load(Ordering::Acquire));
+            let current = State::from_raw(self.state.load(Ordering::Acquire));
 
-            // Time advanced - claim new millisecond
+            // Time advanced
             if now > current.timestamp() {
-                let new_state = State::new(now, 0);
-                if self
-                    .state
-                    .compare_exchange_weak(
-                        current.raw(),
-                        new_state.raw(),
-                        Ordering::AcqRel,
-                        Ordering::Acquire,
-                    )
-                    .is_ok()
-                {
-                    return self.create_snowid_fast(now, 0);
+                if let Some(id) = self.try_claim_millisecond(current, now) {
+                    return id;
                 }
                 continue;
             }
 
-            // Same or earlier millisecond with valid sequence
-            let ts = current.timestamp().max(now);
-            if current.sequence() < self.max_seq {
-                let new_state = State::new(ts, current.sequence() + 1);
-                if self
-                    .state
-                    .compare_exchange_weak(
-                        current.raw(),
-                        new_state.raw(),
-                        Ordering::AcqRel,
-                        Ordering::Acquire,
-                    )
-                    .is_ok()
-                {
-                    return self.create_snowid_fast(ts, current.sequence() + 1);
-                }
-                continue;
+            // Try sequence increment
+            if let Some(id) = self.try_increment_sequence(current) {
+                return id;
             }
 
-            // Sequence exhausted - wait for next ms
+            // Sequence exhausted - wait
             self.wait_next_millis(current.timestamp(), backoff_ms);
-            backoff_ms = (backoff_ms.saturating_mul(2)).min(Self::MAX_BACKOFF_MS);
+            backoff_ms = next_backoff(backoff_ms);
         }
     }
 
-    pub(crate) fn wait_next_millis(&self, from_timestamp: u64, mut backoff_ms: u64) -> u64 {
-        loop {
-            if self.config.spin_enabled() && self.config.spin_loops() > 0 {
-                let yield_every = self.config.spin_yield_every();
-                for i in 0..self.config.spin_loops() {
-                    let new_ts = self.now_ms();
-                    if new_ts > from_timestamp {
-                        return new_ts;
-                    }
-                    std::hint::spin_loop();
-                    if yield_every != 0 && i % yield_every == yield_every - 1 {
-                        thread::yield_now();
-                    }
-                }
-            }
-
-            thread::sleep(Duration::from_millis(backoff_ms));
-            let new_ts = self.now_ms();
-            if new_ts > from_timestamp {
-                return new_ts;
-            }
-            backoff_ms = backoff_ms.saturating_mul(2).min(Self::MAX_BACKOFF_MS);
+    /// Wait for next millisecond using spin + sleep strategy
+    pub(crate) fn wait_next_millis(&self, from_ts: u64, backoff_ms: u64) -> u64 {
+        // Try spin-wait first
+        if let Some(new_ts) = spin_wait(from_ts, &self.config, || self.now_ms()) {
+            return new_ts;
         }
+        // Fall back to sleep
+        sleep_until_next_ms(from_ts, backoff_ms, || self.now_ms())
     }
 
+    /// Assemble final SnowID from components
     #[inline(always)]
-    fn create_snowid_fast(&self, timestamp: u64, sequence: u16) -> u64 {
+    fn assemble_id(&self, timestamp: u64, sequence: u16) -> u64 {
         ((timestamp & self.ts_mask) << self.ts_shift) | self.node_prefix | (sequence as u64)
     }
 
     #[inline(always)]
-    pub(crate) fn create_snowid_with_node(
-        &self,
-        timestamp: u64,
-        node_id: u16,
-        sequence: u16,
-    ) -> u64 {
-        ((timestamp & self.config.timestamp_mask()) << self.config.timestamp_shift())
-            | ((node_id as u64) << self.config.node_shift())
-            | (sequence as u64)
+    pub(crate) fn create_snowid_with_node(&self, ts: u64, node: u16, seq: u16) -> u64 {
+        ((ts & self.config.timestamp_mask()) << self.config.timestamp_shift())
+            | ((node as u64) << self.config.node_shift())
+            | (seq as u64)
     }
 }

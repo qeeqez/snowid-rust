@@ -7,10 +7,8 @@ mod tests {
         let generator = SnowID::new(1).unwrap();
         let snowid1 = generator.generate();
 
-        // Simulate clock moving backwards by saving current timestamp
-        let original_timestamp = generator.last_timestamp.load(Ordering::SeqCst);
-
         // Generate another ID - it should handle backwards clock gracefully
+        // Even if system clock went backwards, IDs remain monotonic
         let snowid2 = generator.generate();
 
         assert!(
@@ -21,6 +19,7 @@ mod tests {
         let (ts1, _, seq1) = generator.extract.decompose(snowid1);
         let (ts2, _, seq2) = generator.extract.decompose(snowid2);
 
+        // IDs are monotonic: either timestamp advanced or sequence incremented
         if ts1 == ts2 {
             assert!(
                 seq2 > seq1,
@@ -28,9 +27,12 @@ mod tests {
             );
         } else {
             assert!(
-                ts2 >= original_timestamp,
-                "Timestamp should not go backwards"
+                ts2 >= ts1,
+                "Timestamp should not go backwards: ts1={}, ts2={}",
+                ts1,
+                ts2
             );
         }
     }
 }
+

@@ -1,6 +1,5 @@
 version: 2
 updates:
-  # GitHub Actions dependencies
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -9,8 +8,11 @@ updates:
     commit-message:
       prefix: "ci"
       include: "scope"
+    groups:
+      dependencies:
+        patterns:
+          - "*"
 
-  # Rust dependencies
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
@@ -19,3 +21,7 @@ updates:
     commit-message:
       prefix: "build"
       include: "scope"
+    groups:
+      dependencies:
+        patterns:
+          - "*"

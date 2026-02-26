@@ -1,0 +1,29 @@
+version: "2"
+linters:
+  default: all
+  disable:
+    - cyclop # duplicate of gocyclo
+    - depguard
+    - dupl
+    - err113
+    - exhaustruct
+    - forcetypeassert
+    - funcorder
+    - funlen
+    - lll
+    - gochecknoglobals
+    - godot
+    - godox # false positive to do marks
+    - gosec # false positive credentials in tests
+    - ireturn
+    - mnd
+    - nestif
+    - nlreturn
+    - rowserrcheck # not relevant (SQL)
+    - sqlclosecheck # not relevant (SQL)
+    - tagalign
+    - tagliatelle
+    - varnamelen
+    - wrapcheck
+    - wsl # Deprecated
+    - wsl_v5 # no need to check for extra whitespace lines

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2](https://github.com/qeeqez/snowid-rust/compare/v2.0.1...v2.0.2) (2026-02-26)
+
+
+### Bug Fixes
+
+* get back release please builds ([2dde501](https://github.com/qeeqez/snowid-rust/commit/2dde50103126e9c817ff0b551b3af1d8748b9892))
+
 ## [2.0.0](https://github.com/qeeqez/snowid-rust/compare/v1.0.1...v2.0.0) (2026-01-30)
 
 

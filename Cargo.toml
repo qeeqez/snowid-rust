@@ -30,7 +30,7 @@ opt-level = 0
 debug = true
 
 [dependencies]
-base62 = "2.2.3"
+base62 = "2.2.4"
 
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["html_reports"] }

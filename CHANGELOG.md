@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.3](https://github.com/qeeqez/snowid-rust/compare/v2.0.2...v2.0.3) (2026-03-31)
+
+
+### Bug Fixes
+
+* **deps:** bump base62 from 2.2.3 to 2.2.4 in the dependencies group ([cc3eee2](https://github.com/qeeqez/snowid-rust/commit/cc3eee2eba2bf96403bc188fdfc3dd0fb2e7e8d4))
+
 ## [2.0.2](https://github.com/qeeqez/snowid-rust/compare/v2.0.1...v2.0.2) (2026-02-26)
 
 
